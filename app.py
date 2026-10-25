@@ -6,7 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 st.set_page_config(page_title="Agent CXI – Prevendita B2B", page_icon="🔎", layout="wide")
 
@@ -74,15 +74,19 @@ def richiesta(dati):
 
 def chiama(storia):
     c = client()
-    risposta = c.models.generate_content(
-        model=MODELLO,
-        contents=storia,
-        config=types.GenerateContentConfig(
-            system_instruction=ISTRUZIONI,
-            tools=[types.Tool(google_search=types.GoogleSearch())],
-            temperature=0.2,
-        ),
-    )
+    try:
+        risposta = c.models.generate_content(
+            model=MODELLO,
+            contents=storia,
+            config=types.GenerateContentConfig(
+                system_instruction=ISTRUZIONI,
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+                temperature=0.2,
+            ),
+        )
+    except errors.APIError as e:
+        st.error(f"Gemini ha risposto con un errore {e.code} {e.status or ''}: {e.message}")
+        st.stop()
     fonti, ricerche = [], []
     cand = risposta.candidates[0] if risposta.candidates else None
     meta = cand.grounding_metadata if cand else None
