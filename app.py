@@ -73,7 +73,8 @@ def richiesta(dati):
 
 
 def chiama(storia):
-    risposta = client().models.generate_content(
+    c = client()
+    risposta = c.models.generate_content(
         model=MODELLO,
         contents=storia,
         config=types.GenerateContentConfig(
