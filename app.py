@@ -87,12 +87,6 @@ def chiama(storia):
     except errors.APIError as e:
         st.error(f"Gemini ha risposto con un errore {e.code} {e.status or ''}: {e.message}")
         st.expander("Dettagli tecnici").code(json.dumps(e.details, ensure_ascii=False, indent=2), language="json")
-        if e.code == 429:
-            try:
-                prova = c.models.generate_content(model=MODELLO, contents="Rispondi solo: OK")
-                st.info(f"DIAGNOSI: senza ricerca Google la chiamata funziona (risposta: {prova.text!r}, modello: {prova.model_version}).")
-            except errors.APIError as e2:
-                st.info(f"DIAGNOSI: anche senza ricerca Google errore {e2.code} {e2.status}: {e2.message}")
         st.stop()
     fonti, ricerche = [], []
     cand = risposta.candidates[0] if risposta.candidates else None
