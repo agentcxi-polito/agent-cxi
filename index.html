@@ -740,6 +740,7 @@ function loadIstr() {
 /* ---------- ricerche salvate ---------- */
 function currentRun() {
   const r = runs.find(x => x.id === curId) || null;
+  if (r && r.source === 'esempio' && r.raw !== EXAMPLE_MD) { r.raw = EXAMPLE_MD; r.data = null; r.ver = {}; r.checks = {}; saveRuns(); }
   if (r && !r.data) r.data = parseOutput(r.raw);
   return r;
 }
