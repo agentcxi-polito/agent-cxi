@@ -491,6 +491,7 @@ Priorità con il modello di default CXI. Soglie del Volume: 1 = da 500.000 a 749
 | Direttore Customer Operations | Decisore principale | Tempi di risposta, costo del servizio clienti, gestione dei picchi | "Dopo acquisizioni e nuovi canali i processi di contatto vanno armonizzati: partiamo da un'analisi di quattro settimane." |
 | Direttore Commerciale | Influenzatore | Fidelizzazione, abbandoni, vendite ai clienti esistenti | "Un cliente gestito bene al primo contatto resta: vi mostriamo dove si perde valore nel customer journey." |
 | Responsabile HR e Formazione | Influenzatore | Competenze degli operatori, inserimento dei nuovi assunti | "Percorsi per front-office e team leader, misurati sull'esperienza dei clienti." |
+| Responsabile Marketing e canali digitali | Influenzatore | App, chat e canali digitali, recensioni online | "Chi scrive in chat si aspetta la stessa risposta del telefono: progettiamo il percorso su tutti i canali." |
 
 **Tabella 5 – Servizi CXI pertinenti**
 
@@ -751,7 +752,7 @@ function addRun(raw, source, platform, request) {
 }
 function openExample() {
   const ex = runs.find(r => r.source === 'esempio');
-  if (ex) { curId = ex.id; store.set(LS.cur, curId); compareSel = []; fbDraft = null; }
+  if (ex) { if (ex.raw !== EXAMPLE_MD) { ex.raw = EXAMPLE_MD; ex.data = null; ex.ver = {}; ex.checks = {}; saveRuns(); } curId = ex.id; store.set(LS.cur, curId); compareSel = []; fbDraft = null; }
   else addRun(EXAMPLE_MD, 'esempio', '', { ...CASE1 });
   location.hash = '#/risultati';
 }
@@ -765,7 +766,21 @@ function runTitle(run) {
 const maxScore = d => d.criteria.reduce((s, k) => s + k.max, 0) || Math.max(9, ...d.companies.map(c => c.tot || 0));
 
 /* ---------- catalogo, verifica, tempi, indicatori ---------- */
-const istrVersion = t => { const m = String(t || '').match(/versione\s+(\d+)/i); return m ? 'v' + m[1] : 'non indicata'; };
+const istrVersion = t => { const m = String(t || '').match(/versione\s+(\d+(?:[.,]\d+)?)/i); return m ? 'v' + m[1].replace(',', '.') : 'non indicata'; };
+const buKey = s => norm(s).replace(/\bexperience\b/g, 'x').replace(/\s+/g, ' ').trim();
+function parseBlock(t, re) {
+  const L = String(t || '').split('\n'); const i = L.findIndex(l => re.test(l));
+  if (i < 0) return null;
+  const out = {};
+  for (let j = i + 1; j < L.length; j++) {
+    const l = L[j].trim();
+    if (!l) { if (Object.keys(out).length) break; continue; }
+    const m = l.match(/^[-•]\s*([^:]+?):\s*(.+)$/);
+    if (!m) break;
+    out[buKey(m[1])] = m[2];
+  }
+  return Object.keys(out).length ? out : null;
+}
 function parseCatalog(t) {
   const L = String(t || '').split('\n'); const i = L.findIndex(l => /catalogo dei servizi/i.test(l));
   if (i < 0) return null;
@@ -774,14 +789,14 @@ function parseCatalog(t) {
     const l = L[j].trim();
     if (/^proponi solo|^modello di priorit|^\d+\.\s/i.test(l)) break;
     const m = l.match(/^[-•]\s*([^:]+?):\s*(.+)$/);
-    if (m) m[2].replace(/\.\s*$/, '').split(/;\s*/).forEach(s => { if (s.trim()) out.push({ bu: norm(m[1]), s: norm(s) }); });
+    if (m) m[2].replace(/\.\s*$/, '').split(/;\s*/).forEach(s => { if (s.trim()) out.push({ bu: buKey(m[1]), s: norm(s) }); });
   }
   return out.length ? out : null;
 }
 function inCatalog(cat, service) {
   const m = plain(service).match(/^([^:]+?):\s*(.+)$/);
   if (!m) return false;
-  const bu = norm(m[1]), s = norm(m[2]);
+  const bu = buKey(m[1]), s = norm(m[2]);
   return cat.some(x => x.bu === bu && (x.s === s || x.s.includes(s) || s.includes(x.s)));
 }
 const verOf = (run, name) => (run.ver && run.ver[name]) || {};
@@ -803,6 +818,11 @@ const hasSrc = f => /https?:\/\/|\]\(|\([^)]*\b(19|20)\d{2}\b[^)]*\)|livello\s*[
 const STOP = new Set(['della', 'delle', 'degli', 'dello', 'nella', 'nelle', 'negli', 'sulla', 'sulle', 'dalla', 'dalle', 'questo', 'questa', 'anche', 'fonte', 'livello', 'stampa', 'comunicato', 'ufficiale', 'secondaria', 'confermare', 'aggiornare', 'verificare', 'trovato', 'economica', 'locale', 'nazionale', 'settore', 'articolo', 'relazione', 'annuale']);
 const words = s => new Set(norm(s).split(' ').filter(w => w.length >= 5 && !STOP.has(w)));
 const linked = c => { const f = words(c.facts.join(' ')); return [...words(c.hook)].some(w => f.has(w)); };
+const WEAK = new Set(['clienti', 'cliente', 'nuova', 'nuovo', 'nuove', 'nuovi', 'media', 'gestire', 'gestione', 'direzione', 'direttore', 'responsabile', 'servizio', 'servizi', 'aziende', 'azienda', 'progetti', 'progetto', 'processi', 'tutti']);
+const SHORT = new Set(['app', 'chat', 'call', 'lead', 'esg', 'hr', 'crm', 'web', 'bdc', 'cup']);
+const stems = s => new Set(norm(s).split(' ').filter(w => SHORT.has(w) || (w.length >= 5 && !STOP.has(w) && !WEAK.has(w))).map(w => w.length <= 4 ? w : w.slice(0, Math.min(6, w.length - 1))));
+const overlap = (a, b) => { const B = stems(b); return [...stems(a)].some(w => B.has(w)); };
+const mainBu = c => { const m = plain(c.main).match(/^([^:]+?):/); return m ? buKey(m[1]) : ''; };
 
 function measures(run) {
   const d = run.data, cs = d.companies, n = cs.length, out = [];
@@ -847,8 +867,14 @@ function measures(run) {
     add('EC15', 'Attinenza con servizi offerti', `${pct(svc.length - bad.length, svc.length) ?? 0}% (${svc.length - bad.length} su ${svc.length} servizi nel catalogo)${bad.length ? '. Fuori catalogo: ' + bad.map(x => `${x.c}, «${plain(x.s)}»`).join('; ') : ''}`, svc.length ? !bad.length : null, '100%', 'auto', pct(svc.length - bad.length, svc.length));
   } else add('EC15', 'Attinenza con servizi offerti', 'Catalogo non disponibile: il sito non riesce a leggere istruzioni.txt', null, '100%', 'auto', null);
 
-  const hk = cs.filter(c => filled(c.hook)).length, lk = cs.filter(c => filled(c.hook) && linked(c)).length;
-  add('EC16', 'Match tra servizi e bisogni del buyer', `${hk} su ${n} con l'aggancio al fatto; ${lk} con parole in comune con i fatti della Tabella 3`, n ? hk === n && lk === n : null, '100%', 'auto', pct(lk, n));
+  const trig = parseBlock(istr, /quando proporre/i), who = parseBlock(istr, /interlocutore tipico/i);
+  const hasHook = c => filled(c.hook), isLinked = c => filled(c.hook) && linked(c);
+  const fits = c => !trig || (!!trig[mainBu(c)] && overlap(trig[mainBu(c)], c.facts.join(' ') + ' ' + c.hook));
+  const hasRole = c => !who || (!!who[mainBu(c)] && overlap(who[mainBu(c)], rolesFor(d, c).map(r => r.ruolo).join(' ')));
+  const hk = cs.filter(hasHook).length, lk = cs.filter(isLinked).length, fk = cs.filter(fits).length, rk = cs.filter(hasRole).length;
+  const good = cs.filter(c => hasHook(c) && isLinked(c) && fits(c) && hasRole(c)).length;
+  const noRole = who ? cs.filter(c => !hasRole(c)).map(c => c.name) : [];
+  add('EC16', 'Match tra servizi e bisogni del buyer', `${hk} su ${n} con l'aggancio al fatto; ${lk} legati a un fatto della Tabella 3${trig ? `; ${fk} con un servizio principale adatto al tipo di fatto` : ''}${who ? `; ${rk} con un interlocutore interessato al servizio principale` : ''}${noRole.length ? `. Manca l'interlocutore adatto per: ${noRole.join(', ')}` : ''}`, n ? good === n : null, '100%', 'auto', pct(good, n));
 
   const fullRoles = d.roles.filter(r => [r.ruolo, r.peso, r.interessa, r.messaggio].every(filled)).length;
   add('EC17', 'Riconosce ruoli essenziali', `${fullRoles} ruoli completi di peso, interessi e primo messaggio`, fullRoles >= 3, 'almeno 3', 'auto', fullRoles);
