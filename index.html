@@ -207,6 +207,18 @@ button.pill{cursor:pointer}
 .pill.todo{background:var(--amber-soft);color:var(--amber-ink);border-color:#F1D9A4}
 .pill.ok{background:var(--green-soft);color:var(--green-ink);border-color:#BFE3CF}
 .pill.neutral{background:#EEF2F7;color:#3D4A5C}
+.pill.ko{background:var(--red-soft);color:#8A2A1C;border-color:#F2C6BE}
+a.nolink{text-decoration:none;display:inline-flex}
+fieldset.vin{border:0;padding:0;margin:0}
+fieldset.vin legend{margin-bottom:8px}
+.radio{display:inline-flex;align-items:center;gap:7px;margin-right:18px;font-weight:500;cursor:pointer}
+.radio input{width:17px;height:17px;accent-color:var(--blue)}
+.vgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;margin-top:16px}
+#verState{gap:8px}
+#verifica{scroll-margin-top:72px}
+table.ec{min-width:820px}
+table.ec td:first-child{white-space:nowrap}
+table.ec td:nth-child(3){max-width:360px}
 .pill.dec{background:var(--blue-soft);color:var(--blue-ink)}
 .pill.inf{background:var(--orange-soft);color:#8E3E10}
 .res-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;margin-top:20px;align-items:start}
@@ -326,6 +338,7 @@ table.plain th{color:var(--muted);font-weight:600}
   h1{font-size:22px}
   .fields{grid-template-columns:1fr}
   .cbx{grid-template-columns:1fr}
+  .vgrid{grid-template-columns:1fr 1fr}
   .mock-tag{font-size:12px;padding:2px 10px}
   .top-title{display:none}
   .scorecard{flex-direction:column;align-items:stretch}
@@ -574,10 +587,10 @@ function parseOutput(text) {
   const { tables, lines } = parseTables(text);
   const by = {};
   tables.forEach(t => { const k = kind(t); if (!by[k]) by[k] = t; });
-  const d = { params: [], companies: [], excluded: [], roles: [], logic: '', checks: [], metricLabel: '' };
+  const d = { params: [], companies: [], excluded: [], roles: [], logic: '', checks: [], metricLabel: '', criteria: [] };
   const comps = d.companies;
   const find = name => comps.find(c => same(c.name, name));
-  const blank = name => ({ name, sede: '', metric: '', altri: '', fonte: '', facts: [], cluster: '', c: null, a: null, v: null, tot: null, prio: null, main: '', second: '', hook: '' });
+  const blank = name => ({ name, sede: '', metric: '', altri: '', fonte: '', facts: [], cluster: '', scores: [], tot: null, prio: null, main: '', second: '', hook: '' });
   if (by.params) d.params = by.params.body.map(r => [plain(r[0]), r[1] || '']);
   if (by.t1) {
     const h = by.t1.head;
@@ -591,13 +604,23 @@ function parseOutput(text) {
   }
   if (by.t2) {
     const h = by.t2.head;
-    const iP = col(h, /priorit/), iN = col(h, /aziend|nome|societ/), iC = col(h, /cluster/), i1 = col(h, /cambiam/), i2 = col(h, /accessib/), i3 = col(h, /volume/), iT = col(h, /totale/);
+    const iP = col(h, /priorit/), iN0 = col(h, /aziend|nome|societ/), iC = col(h, /cluster/), iT = col(h, /totale|punteggio/);
+    const iN = iN0 >= 0 ? iN0 : 1;
+    const crit = h.map((_, j) => j).filter(j => ![iP, iN, iC, iT].includes(j));
+    d.criteria = crit.map(j => ({ name: plain(h[j]), max: 3 }));
     by.t2.body.forEach((r, k) => {
-      const name = plain(r[iN >= 0 ? iN : 1]); if (!name) return;
+      const name = plain(r[iN]); if (!name) return;
       let c = find(name); if (!c) { c = blank(name); comps.push(c); }
       c.prio = num(r[iP]) || k + 1; c.cluster = plain(r[iC] || '');
-      c.c = num(r[i1]); c.a = num(r[i2]); c.v = num(r[i3]);
-      c.tot = iT >= 0 && num(r[iT]) !== null ? num(r[iT]) : (c.c || 0) + (c.a || 0) + (c.v || 0);
+      c.scores = crit.map(j => num(r[j]));
+      c.tot = iT >= 0 && num(r[iT]) !== null ? num(r[iT]) : c.scores.reduce((s, v) => s + (v || 0), 0);
+    });
+    const keep = d.criteria.map((_, idx) => comps.some(c => c.scores[idx] != null));
+    d.criteria = d.criteria.filter((_, idx) => keep[idx]);
+    comps.forEach(c => { c.scores = c.scores.filter((_, idx) => keep[idx]); });
+    d.criteria.forEach((k, idx) => {
+      const top = Math.max(0, ...comps.map(c => c.scores[idx] ?? 0));
+      k.max = top <= 3 ? 3 : top <= 5 ? 5 : top <= 10 ? 10 : top;
     });
     d.logic = by.t2.ctx.filter(l => !/tabella\s*2|clusterizzazione/i.test(l)).map(plain).join(' ');
   }
@@ -644,7 +667,7 @@ function inline(s) {
 }
 function level(s) {
   const m = String(s || '').match(/\(\s*(?:livello\s*)?([ABC])\s*\)|livello\s*([ABC])\b|,\s*([ABC])\s*[,)]/);
-  return m ? (m[1] || m[2] || m[3]) : '';
+  return m ? (m[1] || m[2] || m[3]) : /fonte secondaria/i.test(String(s || '')) ? 'C' : '';
 }
 const lvlBadge = s => { const L = level(s); return L ? `<span class="lvl lvl-${L}" title="Fonte di livello ${L}">${L}</span>` : ''; };
 const AV = ['#2459C2', '#1F7A50', '#A84A16', '#6447D8', '#0B7380', '#9C3459'];
@@ -720,7 +743,7 @@ function currentRun() {
   return r;
 }
 function addRun(raw, source, platform, request) {
-  const run = { id: Date.now().toString(36), created: new Date().toISOString(), source, platform, request, raw, verif: {}, checks: {} };
+  const run = { id: Date.now().toString(36), created: new Date().toISOString(), source, platform, request, raw, ver: {}, checks: {} };
   run.data = parseOutput(raw);
   runs.unshift(run); curId = run.id; compareSel = []; fbDraft = null;
   saveRuns(); store.set(LS.cur, curId);
@@ -739,7 +762,138 @@ function runTitle(run) {
   if (s) return plain(s) + (a ? ' (' + plain(a) + ')' : '');
   return reqTitle(run.request || DEFAULT_REQ);
 }
-const maxScore = d => 3 * (d.companies.some(c => c.c != null) + d.companies.some(c => c.a != null) + d.companies.some(c => c.v != null)) || 9;
+const maxScore = d => d.criteria.reduce((s, k) => s + k.max, 0) || Math.max(9, ...d.companies.map(c => c.tot || 0));
+
+/* ---------- catalogo, verifica, tempi, indicatori ---------- */
+const istrVersion = t => { const m = String(t || '').match(/versione\s+(\d+)/i); return m ? 'v' + m[1] : 'non indicata'; };
+function parseCatalog(t) {
+  const L = String(t || '').split('\n'); const i = L.findIndex(l => /catalogo dei servizi/i.test(l));
+  if (i < 0) return null;
+  const out = [];
+  for (let j = i + 1; j < L.length; j++) {
+    const l = L[j].trim();
+    if (/^proponi solo|^modello di priorit|^\d+\.\s/i.test(l)) break;
+    const m = l.match(/^[-•]\s*([^:]+?):\s*(.+)$/);
+    if (m) m[2].replace(/\.\s*$/, '').split(/;\s*/).forEach(s => { if (s.trim()) out.push({ bu: norm(m[1]), s: norm(s) }); });
+  }
+  return out.length ? out : null;
+}
+function inCatalog(cat, service) {
+  const m = plain(service).match(/^([^:]+?):\s*(.+)$/);
+  if (!m) return false;
+  const bu = norm(m[1]), s = norm(m[2]);
+  return cat.some(x => x.bu === bu && (x.s === s || x.s.includes(s) || s.includes(x.s)));
+}
+const verOf = (run, name) => (run.ver && run.ver[name]) || {};
+function vstate(v) { if (v.vincoli === 'no' || (+v.falsi || 0) > 0) return 'ko'; if (v.vincoli === 'si') return 'ok'; return 'todo'; }
+const VSTATE = { todo: ['todo', 'clock', 'Da verificare'], ok: ['ok', 'checkc', 'Conforme'], ko: ['ko', 'alert', 'Con errori'] };
+const vpill = v => { const [cls, icn, txt] = VSTATE[vstate(v)]; return `<span class="pill ${cls}">${ic(icn)}${txt}</span>`; };
+function stampVerified(run) {
+  if (!run.t) return;
+  const cs = run.data.companies;
+  const all = cs.length > 0 && cs.every(c => ['si', 'no'].includes(verOf(run, c.name).vincoli));
+  run.t.verified = all ? (run.t.verified || Date.now()) : null;
+}
+const mins = (a, b) => (a && b) ? Math.max(0, Math.round((b - a) / 60000)) : null;
+const fmtMin = m => m == null ? '—' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+const pct = (a, b) => b ? Math.round(100 * a / b) : null;
+const filled = v => { const p = plain(v); return !!p && !/^(—|–|-|n\.?\s?d\.?|non trovat[oa]|non indicat[oa])$/i.test(p); };
+const factOk = f => filled(f) && !/non trovat/i.test(f);
+const hasSrc = f => /https?:\/\/|\]\(|\([^)]*\b(19|20)\d{2}\b[^)]*\)|livello\s*[ABC]\b|,\s*[ABC]\s*[,)]/i.test(f);
+const STOP = new Set(['della', 'delle', 'degli', 'dello', 'nella', 'nelle', 'negli', 'sulla', 'sulle', 'dalla', 'dalle', 'questo', 'questa', 'anche', 'fonte', 'livello', 'stampa', 'comunicato', 'ufficiale', 'secondaria', 'confermare', 'aggiornare', 'verificare', 'trovato', 'economica', 'locale', 'nazionale', 'settore', 'articolo', 'relazione', 'annuale']);
+const words = s => new Set(norm(s).split(' ').filter(w => w.length >= 5 && !STOP.has(w)));
+const linked = c => { const f = words(c.facts.join(' ')); return [...words(c.hook)].some(w => f.has(w)); };
+
+function measures(run) {
+  const d = run.data, cs = d.companies, n = cs.length, out = [];
+  const cat = parseCatalog(istr);
+  const asked = run.request && run.request.mode !== 'libera' && +run.request.nomi ? +run.request.nomi : num((d.params.find(([k]) => /numero/.test(norm(k))) || [])[1]);
+  const add = (code, name, value, ok, target, how, val) => out.push({ code, name, value, ok, target, how, val });
+  const vs = cs.map(c => verOf(run, c.name));
+
+  const ans = vs.filter(v => v.vincoli === 'si' || v.vincoli === 'no'), si = ans.filter(v => v.vincoli === 'si').length, left = n - ans.length;
+  add('EC01', 'Attinenza ai vincoli', ans.length ? `${si} su ${ans.length} aziende verificate rispettano i vincoli (${pct(si, ans.length)}%)${left ? `; ${left} da verificare` : ''}` : 'Nessuna azienda ancora verificata', ans.length ? si === ans.length : null, '100%', 'verifica', ans.length ? pct(si, ans.length) : null);
+
+  add('EC03', 'Numero aziende proposte', asked ? `${n} su ${asked} richieste` : `${n}`, asked ? n >= asked : null, asked ? `almeno ${asked}` : 'quante richieste', 'auto', n);
+
+  let tot = 0, ok = 0; const cell = v => { tot++; if (filled(v)) ok++; };
+  cs.forEach(c => {
+    [c.sede, c.metric, c.fonte, c.cluster, c.main, c.second, c.hook].forEach(cell);
+    if (d.criteria.length) c.scores.forEach(v => cell(v == null ? '' : String(v))); else cell('');
+    cell(c.tot == null ? '' : String(c.tot));
+    cell(c.facts.filter(factOk).join(' '));
+  });
+  d.roles.forEach(r => [r.ruolo, r.peso, r.interessa, r.messaggio].forEach(cell));
+  for (let k = d.roles.length; k < 3; k++) [1, 2, 3, 4].forEach(() => cell(''));
+  cell(d.logic); cell(d.checks.join(' '));
+  add('EC05', 'Completezza dei campi', `${pct(ok, tot)}% (${ok} su ${tot} campi compilati)`, ok === tot, '100%', 'auto', pct(ok, tot));
+
+  const dati = vs.reduce((s, v) => s + (+v.dati || 0), 0), falsi = vs.reduce((s, v) => s + Math.min(+v.falsi || 0, +v.dati || 0), 0);
+  add('EC06', 'Dati inventati', dati ? `Falsi o inesistenti: ${falsi} su ${dati} dati controllati (${pct(falsi, dati)}%)` : 'Nessun dato ancora controllato', dati ? falsi === 0 : null, '0%', 'verifica', dati ? pct(falsi, dati) : null);
+
+  const lv = { A: 0, B: 0, C: 0, '': 0 }; let units = 0, src = 0;
+  cs.forEach(c => { units++; if (filled(c.fonte)) src++; lv[level(c.fonte)]++; c.facts.filter(factOk).forEach(f => { units++; if (hasSrc(f)) src++; lv[level(f)]++; }); });
+  add('EC07', 'Fonte indicata', units ? `${pct(src, units)}% dei dati (${src} su ${units}). Livello A ${lv.A}, B ${lv.B}, C ${lv.C}, non indicato ${lv['']}` : 'Nessun dato', units ? src === units : null, '100%', 'auto', pct(src, units));
+  const ap = vs.reduce((s, v) => s + (+v.fonti || 0), 0), va = vs.reduce((s, v) => s + Math.min(+v.valide || 0, +v.fonti || 0), 0);
+  add('EC07', 'Fonte valida', ap ? `${va} su ${ap} fonti aperte confermano il dato (${pct(va, ap)}%)` : 'Nessuna fonte ancora aperta', ap ? va === ap : null, '100%', 'verifica', ap ? pct(va, ap) : null);
+
+  const complete = cs.filter(c => d.criteria.length && c.scores.length === d.criteria.length && c.scores.every(v => v != null) && c.tot === c.scores.reduce((s, v) => s + v, 0)).length;
+  let inv = 0; for (let i = 0; i + 1 < n; i++) if ((cs[i].tot ?? 0) < (cs[i + 1].tot ?? 0)) inv++;
+  add('EC14', 'Motivazione della priorità', `${complete} su ${n} con tutti i punteggi e il totale giusto; ${inv ? `${inv} inversioni nell'ordine` : 'ordine coerente con i totali'}${d.logic ? '' : '; manca la frase con la logica'}`, n ? complete === n && !inv && !!d.logic : null, '100%, ordine coerente', 'auto', pct(complete, n));
+
+  const svc = cs.flatMap(c => [c.main, c.second].filter(filled).map(s => ({ c: c.name, s })));
+  if (cat) {
+    const bad = svc.filter(x => !inCatalog(cat, x.s));
+    add('EC15', 'Attinenza con servizi offerti', `${pct(svc.length - bad.length, svc.length) ?? 0}% (${svc.length - bad.length} su ${svc.length} servizi nel catalogo)${bad.length ? '. Fuori catalogo: ' + bad.map(x => `${x.c}, «${plain(x.s)}»`).join('; ') : ''}`, svc.length ? !bad.length : null, '100%', 'auto', pct(svc.length - bad.length, svc.length));
+  } else add('EC15', 'Attinenza con servizi offerti', 'Catalogo non disponibile: il sito non riesce a leggere istruzioni.txt', null, '100%', 'auto', null);
+
+  const hk = cs.filter(c => filled(c.hook)).length, lk = cs.filter(c => filled(c.hook) && linked(c)).length;
+  add('EC16', 'Match tra servizi e bisogni del buyer', `${hk} su ${n} con l'aggancio al fatto; ${lk} con parole in comune con i fatti della Tabella 3`, n ? hk === n && lk === n : null, '100%', 'auto', pct(lk, n));
+
+  const fullRoles = d.roles.filter(r => [r.ruolo, r.peso, r.interessa, r.messaggio].every(filled)).length;
+  add('EC17', 'Riconosce ruoli essenziali', `${fullRoles} ruoli completi di peso, interessi e primo messaggio`, fullRoles >= 3, 'almeno 3', 'auto', fullRoles);
+
+  const t = run.t || {}, m1 = mins(t.start, t.output), m2 = mins(t.start, t.verified);
+  add('EC18', 'Tempo per query', run.source === 'esempio' ? 'Non misurato: è l\'esempio' : !t.start ? 'Non misurato: la richiesta non è partita da questo sito' : `${fmtMin(m1)} dalla richiesta all'output; ${t.verified ? `${fmtMin(m2)} fino all'ultima verifica` : 'verifica in corso'}`, null, 'da fissare', 'auto', m2);
+
+  const miss = [['richiesta', run.request], ['testo inviato alla chat', run.prompt], ['output', run.raw], ['versione delle istruzioni', run.istr]].filter(p => !p[1]).map(p => p[0]);
+  const ex = run.source === 'esempio';
+  add('EC21', 'Tracciabilità', ex ? 'Non applicabile all\'esempio' : miss.length ? `Manca: ${miss.join(', ')}` : 'Registro completo: richiesta, testo inviato, output, versione delle istruzioni', ex ? null : !miss.length, 'registro completo', 'auto', ex ? null : miss.length ? 0 : 100);
+  return out;
+}
+let istrTried = false;
+function measuresHTML(run) {
+  if (!istr && !istrTried) { istrTried = true; loadIstr().then(() => rerender()).catch(() => {}); }
+  const st = ok => ok === true ? `<span class="pill ok">${ic('checkc')}In obiettivo</span>` : ok === false ? `<span class="pill ko">${ic('alert')}Fuori obiettivo</span>` : '<span class="pill neutral">—</span>';
+  return `<section class="panel" style="margin-top:20px"><h2>${ic('chart')}Indicatori della casa della qualità</h2>
+    <p class="muted small" style="margin:-4px 0 12px">Calcolati sull'output e sulle tue verifiche. I controlli automatici guardano la presenza, non la qualità: un aggancio presente non è per forza pertinente. Gli obiettivi sono provvisori. EC11 (ripetibilità) ed EC22 (dati riservati) non si misurano qui.</p>
+    <div class="table-wrap"><table class="mini ec"><thead><tr><th>EC</th><th>Indicatore</th><th>Valore</th><th>Obiettivo</th><th>Dato</th><th>Stato</th></tr></thead><tbody>
+    ${measures(run).map(m => `<tr><td><b>${m.code}</b></td><td>${esc(m.name)}</td><td>${esc(m.value)}</td><td>${esc(m.target)}</td><td class="muted">${m.how === 'auto' ? 'Automatico' : 'Dalla tua verifica'}</td><td>${st(m.ok)}</td></tr>`).join('')}
+    </tbody></table></div></section>`;
+}
+const verStateHTML = v => `<span class="lbl">Stato:</span>${vpill(v)}${(+v.falsi || 0) > (+v.dati || 0) || (+v.valide || 0) > (+v.fonti || 0) ? '<span class="err small" style="padding:4px 10px">I falsi o le fonti valide superano i controllati: correggi i numeri</span>' : ''}`;
+function verHTML(run, i, c) {
+  const v = verOf(run, c.name);
+  const r = (val, label) => `<label class="radio"><input type="radio" name="vin" value="${val}" data-ver="vincoli" data-i="${i}" ${(v.vincoli || '') === val ? 'checked' : ''}>${label}</label>`;
+  const nf = (k, label) => `<div class="field"><label for="v-${k}">${label}</label><input type="number" min="0" inputmode="numeric" id="v-${k}" data-ver="${k}" data-i="${i}" value="${esc(v[k] ?? '')}"></div>`;
+  return `<section class="panel" id="verifica" style="margin-top:20px"><h2>${ic('checkc')}Verifica dell'account (controllo 2)</h2>
+    <p class="muted small" style="margin:-4px 0 14px">Compilala dopo aver controllato i dati di questa azienda sulle fonti, e conta solo quello che hai controllato davvero. Le risposte calcolano EC01, EC06 ed EC07 nei risultati.</p>
+    <fieldset class="vin"><legend class="lbl">Rispetta tutti i vincoli della richiesta (sede, settore, dimensione)?</legend><div class="row">${r('si', 'Sì')}${r('no', 'No')}${r('', 'Non ancora')}</div></fieldset>
+    <div class="vgrid">${nf('dati', 'Dati controllati')}${nf('falsi', 'Di cui falsi o inesistenti')}${nf('fonti', 'Fonti aperte')}${nf('valide', 'Di cui confermano il dato')}</div>
+    <div class="field" style="margin-top:12px"><label for="v-note">Note</label><input type="text" id="v-note" data-ver="note" data-i="${i}" value="${esc(v.note || '')}" placeholder="es. nel bilancio 2025 i clienti sono 820.000"></div>
+    <p class="row" style="margin-top:14px" id="verState">${verStateHTML(v)}</p></section>`;
+}
+function setVer(el) {
+  const run = currentRun(); if (!run) return;
+  const c = run.data.companies[+el.dataset.i]; if (!c) return;
+  run.ver = run.ver || {};
+  const v = { ...(run.ver[c.name] || {}) };
+  v[el.dataset.ver] = el.type === 'number' ? (el.value === '' ? '' : Math.max(0, Math.floor(+el.value))) : el.value;
+  run.ver[c.name] = v;
+  stampVerified(run); saveRuns();
+  const s = $('#verState'); if (s) s.innerHTML = verStateHTML(v);
+  const p = $('#verPill'); if (p) p.innerHTML = vpill(v);
+}
 function sourceLine(run) {
   if (run.source === 'esempio') return `<div class="strip amber">${ic('info')}<span><b>Dati di esempio.</b> Aziende, numeri e fonti sono inventati per mostrare come funziona il sito. Per un risultato vero esegui una ricerca con la tua chat.</span></div>`;
   return `<div class="strip blue">${ic('chat')}<span>Output incollato da <b>${esc(run.platform || 'una chat')}</b> il ${fmtDate(run.created)}. I dati vanno controllati prima dell'uso: parti dalle verifiche consigliate.</span></div>`;
@@ -769,7 +923,7 @@ function sky() {
 }
 function runItem(r, del) {
   if (!r.data) r.data = parseOutput(r.raw);
-  const n = r.data.companies.length, v = Object.values(r.verif || {}).filter(Boolean).length;
+  const n = r.data.companies.length, v = r.data.companies.filter(c => vstate(verOf(r, c.name)) !== 'todo').length;
   return `<div class="run-item">${ic(r.source === 'esempio' ? 'info' : 'chat')}
     <div class="t"><b>${esc(runTitle(r))}</b><span class="muted small">${r.source === 'esempio' ? 'Esempio con dati inventati' : 'Output da ' + esc(r.platform || 'chat')}, ${fmtDate(r.created)}. ${n} aziende, ${v} verificate.</span></div>
     ${del ? `<button class="btn sm ghost" data-act="delRun" data-id="${r.id}" aria-label="Elimina questa ricerca">${ic('trash')}</button>` : ''}
@@ -893,7 +1047,7 @@ function viewEsegui() {
       <h2>${ic('chat')}Con la tua chat</h2>
       <p class="muted" style="margin:-4px 0 18px">Usa Gemini, ChatGPT o Claude con la ricerca web attiva. È gratuito e non serve programmare.</p>
       <ol class="steps">
-        <li><h3>Copia il testo per la chat</h3><p>Contiene le istruzioni dell'agent (versione v0) e la tua richiesta.</p>
+        <li><h3>Copia il testo per la chat</h3><p>Contiene le istruzioni dell'agent (istruzioni.txt) e la tua richiesta.${req.t0 ? ` Il cronometro della ricerca (EC18) è partito alle ${new Date(req.t0).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e si ferma quando hai verificato tutte le aziende.` : ''}</p>
           <div class="row"><button class="btn primary" data-act="copyPrompt"${ready ? '' : ' disabled'}>${ic('copy')}Copia il testo</button><button class="btn" data-act="showPrompt"${ready ? '' : ' disabled'}>Mostra il testo</button><button class="btn ghost" data-act="dlPrompt"${ready ? '' : ' disabled'}>${ic('download')}Scarica .txt</button></div>
           <pre class="prompt" id="promptBox" hidden></pre></li>
         <li><h3>Incollalo in una chat nuova</h3><p>${libera ? 'La chat ti mostrerà il riepilogo dei parametri: conferma o correggi, poi aspetta l\'output completo.' : 'La chat mostrerà il riepilogo dei parametri e procederà senza chiedere conferma.'} Se la chat ha un interruttore per la ricerca web, attivalo.</p>
@@ -922,7 +1076,6 @@ function viewRisultati() {
   const d = run.data, max = maxScore(d);
   const sel = compareSel;
   const rows = d.companies.map((c, i) => {
-    const ok = !!run.verif[c.name];
     return `<tr>
       <td><input type="checkbox" data-act="sel" data-i="${i}" ${sel.includes(i) ? 'checked' : ''} ${!sel.includes(i) && sel.length >= 3 ? 'disabled' : ''} aria-label="Seleziona ${esc(c.name)} per il confronto"></td>
       <td class="prio">${c.prio ?? i + 1}</td>
@@ -930,7 +1083,7 @@ function viewRisultati() {
       <td>${esc(c.cluster) || '—'}</td>
       <td>${inline(c.metric) || '—'}</td>
       <td>${c.tot != null ? `<div class="score"><b>${c.tot}<small>/${max}</small></b>${bar(c.tot, max)}</div>` : '—'}</td>
-      <td><button class="pill ${ok ? 'ok' : 'todo'}" data-act="verif" data-i="${i}" aria-pressed="${ok}" title="Segna se hai controllato i dati di questa azienda">${ic(ok ? 'checkc' : 'clock')}${ok ? 'Verificato' : 'Da verificare'}</button></td>
+      <td><a class="nolink" href="#/azienda/${i}/verifica" title="Apri la verifica di questa azienda">${vpill(verOf(run, c.name))}</a></td>
       <td><a class="btn sm" href="#/azienda/${i}">Vedi dettagli</a></td></tr>`;
   }).join('');
   const vdone = run.checks || {};
@@ -941,7 +1094,7 @@ function viewRisultati() {
   ${sourceLine(run)}
   ${d.logic ? `<p class="logic">${ic('info')}<span>${inline(d.logic)}</span></p>` : ''}
   ${d.companies.length ? `<section class="panel" style="padding:0">
-    <div class="tablebar"><span class="grow muted small">Seleziona fino a 3 aziende per confrontarle. «Verificato» lo segni tu dopo il controllo dei dati.</span><button class="btn sm blue" data-act="goCompare" ${sel.length < 2 ? 'disabled' : ''}>${ic('compare')}Confronta (${sel.length})</button></div>
+    <div class="tablebar"><span class="grow muted small">Seleziona fino a 3 aziende per confrontarle. Lo stato di verifica lo compili tu nella scheda di ogni azienda.</span><button class="btn sm blue" data-act="goCompare" ${sel.length < 2 ? 'disabled' : ''}>${ic('compare')}Confronta (${sel.length})</button></div>
     <div class="table-wrap"><table class="res"><thead><tr><th><span class="sr">Seleziona</span></th><th>#</th><th>Azienda</th><th>Cluster</th><th>${esc(d.metricLabel || 'Dimensione')}</th><th>Punteggio</th><th>Stato verifica</th><th><span class="sr">Azioni</span></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>` : `<div class="strip red">${ic('alert')}<span>Nell'output non ho trovato la tabella delle aziende.</span></div>`}
   <div class="res-grid">
@@ -952,6 +1105,7 @@ function viewRisultati() {
       ${d.excluded.length ? `<table class="mini"><thead><tr><th>Azienda</th><th>Motivo</th></tr></thead><tbody>${d.excluded.map(x => `<tr><td><b>${esc(x.name)}</b></td><td>${inline(x.why)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nessun candidato escluso.</p>'}
     </section>
   </div>
+  ${measuresHTML(run)}
   <details class="more"><summary>Parametri usati dall'agent</summary><div>${d.params.length ? `<table class="mini"><tbody>${d.params.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${inline(v)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">L\'output non contiene la tabella dei parametri.</p>'}</div></details>
   <details class="more"><summary>Testo originale dell'output</summary><div><pre class="raw">${esc(run.raw)}</pre><div class="row" style="margin-top:10px"><button class="btn sm" data-act="dlMd">${ic('download')}Scarica l'output (.md)</button></div></div></details>`;
 }
@@ -961,13 +1115,12 @@ function viewAzienda(arg) {
   const run = currentRun(); if (!run) return emptyState('Apri prima un risultato.');
   const d = run.data, i = +arg, c = d.companies[i];
   if (!c) return `<a class="back" href="#/risultati">${ic('back')}Torna ai risultati</a>` + emptyState('Questa azienda non è nel risultato aperto.');
-  const max = maxScore(d), C = 2 * Math.PI * 50, pct = c.tot != null ? c.tot / max : 0;
-  const ok = !!run.verif[c.name];
+  const max = maxScore(d), C = 2 * Math.PI * 50, share = c.tot != null ? Math.min(1, c.tot / max) : 0;
   const color = { g: 'var(--green)', a: 'var(--amber)', r: 'var(--red)' }[tone(c.tot, max)];
-  const crit = [['Cambiamento', c.c], ['Accessibilità', c.a], ['Volume', c.v]];
+  const crit = d.criteria.map((k, idx) => [k.name, c.scores[idx], k.max]);
   const roles = rolesFor(d, c);
   return `<div class="page-head" style="margin-bottom:12px"><a class="back" href="#/risultati" style="margin:0">${ic('back')}Torna ai risultati</a>
-    <div class="row no-print"><button class="pill ${ok ? 'ok' : 'todo'}" data-act="verif" data-i="${i}" aria-pressed="${ok}">${ic(ok ? 'checkc' : 'clock')}${ok ? 'Verificato' : 'Da verificare'}</button><button class="btn" data-act="dlScheda" data-i="${i}">${ic('download')}Esporta scheda</button></div></div>
+    <div class="row no-print"><a class="nolink" id="verPill" href="#/azienda/${i}/verifica" title="Vai alla verifica">${vpill(verOf(run, c.name))}</a><button class="btn" data-act="dlScheda" data-i="${i}">${ic('download')}Esporta scheda</button></div></div>
   ${run.source === 'esempio' ? `<div class="strip amber">${ic('info')}<span>Azienda e dati inventati, per l'esempio.</span></div>` : ''}
   <div class="det-top">
     <section class="panel"><div class="co-head">${avatar(c.name, 1)}<div><h1>${esc(c.name)}</h1>
@@ -979,9 +1132,9 @@ function viewAzienda(arg) {
       </ul></div></div></section>
     <section class="panel"><h2>${ic('chart')}Punteggio di priorità</h2>
       <div class="scorecard">
-        <div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#E7ECF2" stroke-width="12"/><circle cx="60" cy="60" r="50" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(pct * C).toFixed(1)} ${C.toFixed(1)}"/></svg>
+        <div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#E7ECF2" stroke-width="12"/><circle cx="60" cy="60" r="50" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(share * C).toFixed(1)} ${C.toFixed(1)}"/></svg>
           <div class="v"><div><b>${c.tot ?? '—'}/${max}</b><small>priorità ${c.prio ?? i + 1}<br>su ${d.companies.length}</small></div></div></div>
-        <div class="crit">${crit.map(([k, v]) => `<div><span>${k}</span>${bar(v, 3)}<b>${v ?? '—'}/3</b></div>`).join('')}</div>
+        <div class="crit">${crit.length ? crit.map(([k, v, m]) => `<div><span>${esc(k)}</span>${bar(v, m)}<b>${v ?? '—'}/${m}</b></div>`).join('') : '<p class="muted small">L\'output non riporta i punteggi per criterio.</p>'}</div>
       </div></section>
   </div>
   <div class="det-grid">
@@ -995,26 +1148,26 @@ function viewAzienda(arg) {
       ${c.hook ? `<div class="hook"><b>Perché è interessante per CXI</b>${inline(c.hook)}</div>` : ''}
       ${!c.main && !c.second ? '<p class="muted">Nessun servizio indicato.</p>' : ''}</section>
   </div>
+  ${verHTML(run, i, c)}
   <section class="panel" style="margin-top:20px"><h2>${ic('people')}Interlocutori e buyer persona</h2>
     ${roles.length ? `<div class="table-wrap"><table class="mini" style="min-width:640px"><thead><tr><th>Ruolo</th><th>Peso</th><th>Cosa gli interessa</th><th>Primo messaggio utile</th></tr></thead><tbody>${roles.map(r => `<tr><td><b>${esc(r.ruolo)}</b></td><td><span class="pill ${/decisor/i.test(r.peso) ? 'dec' : 'inf'}">${esc(r.peso) || '—'}</span></td><td>${inline(r.interessa)}</td><td>${inline(r.messaggio)}</td></tr>`).join('')}</tbody></table></div>
     <p class="muted small" style="margin-top:10px">Solo ruoli, senza nomi di persone.${roles.some(r => r.azienda) ? '' : ' I ruoli valgono per tutte le aziende della ricerca.'}</p>` : '<p class="muted">L\'output non contiene interlocutori.</p>'}</section>
   <div class="det-nav">${i > 0 ? `<a class="btn" href="#/azienda/${i - 1}">${ic('back')}${esc(d.companies[i - 1].name)}</a>` : '<span></span>'}${i < d.companies.length - 1 ? `<a class="btn" href="#/azienda/${i + 1}">${esc(d.companies[i + 1].name)}${ic('next')}</a>` : ''}</div>`;
 }
 
-function synthesis(list, max) {
+function synthesis(list, max, crit) {
   const out = [];
-  const byTot = [...list].sort((a, b) => (b.tot ?? 0) - (a.tot ?? 0) || (b.c ?? 0) - (a.c ?? 0) || (b.a ?? 0) - (a.a ?? 0));
+  const byTot = [...list].sort((a, b) => (b.tot ?? 0) - (a.tot ?? 0) || (a.prio ?? 99) - (b.prio ?? 99));
   const top = byTot[0];
   const tie = byTot[1] && byTot[1].tot === top.tot;
-  out.push(`<b>${esc(top.name)}</b> ha il punteggio più alto (${top.tot}/${max})${tie ? `, a pari merito con ${esc(byTot[1].name)}: passa avanti per la regola di parità (prima Cambiamento, poi Accessibilità)` : ''}.`);
-  const CR = [['c', 'Cambiamento', 'sta cambiando di più', 'sta cambiando di meno'], ['a', 'Accessibilità', 'ha i decisori più raggiungibili', 'ha i decisori meno raggiungibili'], ['v', 'Volume', 'offre l\'opportunità più grande', 'offre l\'opportunità più piccola']];
-  CR.forEach(([k, label, hi]) => {
-    const m = Math.max(...list.map(x => x[k] ?? 0)); const best = list.filter(x => (x[k] ?? 0) === m);
-    if (best.length === 1 && best[0] !== top) out.push(`${esc(best[0].name)} ${hi} (${label} ${m}/3).`);
+  out.push(`<b>${esc(top.name)}</b> ha il punteggio più alto (${top.tot ?? '—'}/${max})${tie ? `, a pari merito con ${esc(byTot[1].name)}: viene prima per la regola di parità dichiarata dall'agent` : ''}.`);
+  crit.forEach((k, idx) => {
+    const vals = list.map(x => x.scores[idx] ?? 0), hi = Math.max(...vals), best = list.filter(x => (x.scores[idx] ?? 0) === hi);
+    if (best.length === 1 && best[0] !== top) out.push(`${esc(best[0].name)} è la più forte su ${esc(k.name)} (${hi}/${k.max}).`);
   });
-  CR.forEach(([k, label, , lo]) => {
-    const m = Math.min(...list.map(x => x[k] ?? 0)); const worst = list.filter(x => (x[k] ?? 0) === m);
-    if (worst.length === 1 && m < 3) out.push(`${esc(worst[0].name)} ${lo} (${label} ${m}/3).`);
+  crit.forEach((k, idx) => {
+    const vals = list.map(x => x.scores[idx] ?? 0), lo = Math.min(...vals), worst = list.filter(x => (x.scores[idx] ?? 0) === lo);
+    if (worst.length === 1 && lo < k.max) out.push(`${esc(worst[0].name)} è la più debole su ${esc(k.name)} (${lo}/${k.max}).`);
   });
   return out.slice(0, 4);
 }
@@ -1028,11 +1181,9 @@ function viewConfronto() {
   const rowsDef = [
     ['Cluster', c => esc(c.cluster) || '—'],
     [esc(d.metricLabel || 'Dimensione'), c => inline(c.metric) || '—'],
-    ['Cambiamento', c => `<div class="cmp-cell"><b>${c.c ?? '—'}/3</b>${bar(c.c, 3)}</div>`],
-    ['Accessibilità', c => `<div class="cmp-cell"><b>${c.a ?? '—'}/3</b>${bar(c.a, 3)}</div>`],
-    ['Volume', c => `<div class="cmp-cell"><b>${c.v ?? '—'}/3</b>${bar(c.v, 3)}</div>`],
+    ...d.criteria.map((k, idx) => [esc(k.name), c => `<div class="cmp-cell"><b>${c.scores[idx] ?? '—'}/${k.max}</b>${bar(c.scores[idx], k.max)}</div>`]),
     ['Servizio principale', c => inline(c.main) || '—'],
-    ['Stato verifica', c => run.verif[c.name] ? `<span class="pill ok">${ic('checkc')}Verificato</span>` : `<span class="pill todo">${ic('clock')}Da verificare</span>`]
+    ['Stato verifica', c => vpill(verOf(run, c.name))]
   ];
   return `<div class="page-head"><div><h1>Confronto aziende</h1><p class="lead">${esc(runTitle(run))}</p></div><a class="back" href="#/risultati" style="margin:0">${ic('back')}Torna ai risultati</a></div>
   <section class="panel">
@@ -1044,7 +1195,7 @@ function viewConfronto() {
     ${list.length ? `<div class="table-wrap"><table class="cmp"><thead><tr><th>Criterio</th>${list.map(c => `<th><div class="co">${avatar(c.name)}<span>${esc(c.name)}</span></div></th>`).join('')}</tr></thead>
       <tbody>${rowsDef.map(([k, fn]) => `<tr><th scope="row">${k}</th>${list.map(c => `<td>${fn(c)}</td>`).join('')}</tr>`).join('')}
       <tr class="tot"><th scope="row">Punteggio totale</th>${list.map(c => `<td>${c.tot ?? '—'}/${max}</td>`).join('')}</tr></tbody></table></div>
-    ${list.length > 1 ? `<div class="synth">${ic('bulb')}<div><p><b>Sintesi del confronto</b></p>${synthesis(list, max).map(x => `<p>${x}</p>`).join('')}<p class="muted small" style="margin-top:6px">Calcolata dai punteggi con regole fisse, non generata dall'AI.</p></div></div>` : ''}` : '<p class="muted" style="margin-top:14px">Aggiungi almeno due aziende.</p>'}
+    ${list.length > 1 ? `<div class="synth">${ic('bulb')}<div><p><b>Sintesi del confronto</b></p>${synthesis(list, max, d.criteria).map(x => `<p>${x}</p>`).join('')}<p class="muted small" style="margin-top:6px">Calcolata dai punteggi con regole fisse, non generata dall'AI.</p></div></div>` : ''}` : '<p class="muted" style="margin-top:14px">Aggiungi almeno due aziende.</p>'}
   </section>`;
 }
 
@@ -1090,13 +1241,17 @@ function viewGuida() {
     <li>In <a href="#/nuova">Nuova ricerca</a> descrivi il target e controlli il riepilogo dei parametri.</li>
     <li>In Esegui copi il testo, lo incolli in una chat nuova con la ricerca web attiva e aspetti l'output.</li>
     <li>Incolli la risposta nel sito: trovi la tabella delle aziende, le schede, il confronto e le verifiche consigliate.</li>
+    <li>Nella scheda di ogni azienda compili la verifica: il sito aggiorna lo stato e gli indicatori della casa della qualità.</li>
   </ol>
   <h2>Cosa c'è e cosa no</h2>
   <table class="plain"><thead><tr><th>Funzione</th><th>Nel mock-up</th></tr></thead><tbody>
     <tr><td>Richiesta guidata o a parole, con riepilogo dei parametri</td><td>Sì</td></tr>
     <tr><td>Esecuzione con la propria chat, lettura dell'output</td><td>Sì</td></tr>
     <tr><td>Risultati, scheda azienda, confronto, verifiche consigliate</td><td>Sì</td></tr>
-    <tr><td>Feedback sui tre criteri CXI, esportazione in Excel e registro .json</td><td>Sì</td></tr>
+    <tr><td>Verifica dell'account con esito (vincoli, dati falsi, fonti valide)</td><td>Sì</td></tr>
+    <tr><td>Indicatori della casa della qualità calcolati sull'output, con cronometro</td><td>Sì, tranne EC11 ed EC22</td></tr>
+    <tr><td>Criteri di priorità diversi da quelli di default</td><td>Sì: il sito legge i criteri che l'agent mette nella Tabella 2</td></tr>
+    <tr><td>Feedback sui tre criteri CXI, esportazione in Excel e registro .json con testo inviato, tempi e indicatori</td><td>Sì</td></tr>
     <tr><td>Ricerca automatica senza chat (API del modello)</td><td>No: serve una chiave a pagamento</td></tr>
     <tr><td>Aziende, Opportunità, Report, Impostazioni</td><td>No: collegamento al CRM, fuori dal perimetro</td></tr>
   </tbody></table>
@@ -1118,44 +1273,60 @@ $('#nav').innerHTML = NAV.map(([r, l, i]) => `<a href="#/${r}" data-r="${r}">${i
   `<span class="nav-group">Fuori dal mock-up</span>` + OFF.map(([l, i]) => `<span class="nav-off" aria-disabled="true" title="Non incluso nel mock-up">${ic(i)}${l}</span>`).join('');
 
 function route(keepScroll) {
-  const [name, arg] = location.hash.replace(/^#\/?/, '').split('/');
+  const [name, arg, sub] = location.hash.replace(/^#\/?/, '').split('/');
   const key = ROUTES[name] ? name : 'home';
   const y = window.scrollY;
-  $('#view').innerHTML = ROUTES[key](arg);
+  $('#view').innerHTML = ROUTES[key](arg, sub);
   if (ROUTES[key].after) ROUTES[key].after(arg);
   const active = key === 'azienda' ? 'risultati' : key === 'esegui' ? 'nuova' : key;
   $$('#nav a').forEach(a => { const on = a.dataset.r === active; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $('#topTitle').textContent = TITLES[key];
   document.title = TITLES[key] + ' – Prospect AI (mock-up per CXI)';
   document.body.classList.remove('menu-open');
-  if (keepScroll === true) window.scrollTo(0, y); else window.scrollTo(0, 0);
+  if (keepScroll === true) window.scrollTo(0, y);
+  else if (sub === 'verifica' && $('#verifica')) $('#verifica').scrollIntoView({ block: 'start' });
+  else window.scrollTo(0, 0);
 }
 const rerender = () => route(true);
+function startClock() { if (!req.t0) req.t0 = Date.now(); }
+function takePrompt(t) {
+  const text = buildPrompt(req, t);
+  req.lastPrompt = text; req.lastIstr = istrVersion(t); req.tCopy = req.tCopy || Date.now();
+  startClock(); saveReq();
+  return text;
+}
 window.addEventListener('hashchange', () => route());
 
 /* ---------- azioni ---------- */
 const ACT = {
   menu() { document.body.classList.toggle('menu-open'); },
-  example(el) { req.mode = 'libera'; req.testo = EXAMPLES[+el.dataset.i]; saveReq(); if (location.hash === '#/nuova') rerender(); else location.hash = '#/nuova'; },
+  example(el) { req.mode = 'libera'; req.testo = EXAMPLES[+el.dataset.i]; startClock(); saveReq(); if (location.hash === '#/nuova') rerender(); else location.hash = '#/nuova'; },
   mode(el, e) { req.mode = el.dataset.mode; saveReq(); if (el.tagName === 'A') return; e.preventDefault(); rerender(); },
   'example-run'(el, e) { e.preventDefault(); openExample(); if (location.hash === '#/risultati') rerender(); },
   prio(el) { const v = el.dataset.v; req.prio = req.prio.includes(v) ? req.prio.filter(x => x !== v) : PRIO_ALL.filter(x => x === v || req.prio.includes(x)); saveReq(); el.setAttribute('aria-pressed', req.prio.includes(v)); el.innerHTML = ic(req.prio.includes(v) ? 'check' : 'plus') + v; refreshSide(); },
-  case1() { req = { ...CASE1 }; saveReq(); rerender(); toast('Compilato con il case 1 di CXI'); },
+  case1() { req = { ...CASE1, t0: Date.now() }; saveReq(); rerender(); toast('Compilato con il case 1 di CXI'); },
   clearReq() { req = { ...DEFAULT_REQ, mode: req.mode }; saveReq(); rerender(); },
   toEsegui() {
     if (!reqReady()) { toast(req.mode === 'libera' ? 'Descrivi la richiesta con qualche dettaglio in più' : 'Compila settore, area e soglia di dimensione'); const c = $('#chkBox'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    startClock(); saveReq();
     location.hash = '#/esegui';
   },
-  copyPrompt() { loadIstr().then(t => copyText(buildPrompt(req, t))).then(() => toast('Testo copiato: incollalo in una chat nuova')).catch(() => toast('Non riesco a leggere istruzioni.txt: apri il sito dal suo link pubblico')); },
-  showPrompt(el) { const b = $('#promptBox'); if (!b.hidden) { b.hidden = true; el.textContent = 'Mostra il testo'; return; } loadIstr().then(t => { b.textContent = buildPrompt(req, t); b.hidden = false; el.textContent = 'Nascondi il testo'; }).catch(() => toast('Non riesco a leggere istruzioni.txt')); },
-  dlPrompt() { loadIstr().then(t => download(`richiesta_${stamp()}.txt`, buildPrompt(req, t))).catch(() => toast('Non riesco a leggere istruzioni.txt')); },
+  copyPrompt() { loadIstr().then(t => copyText(takePrompt(t))).then(() => toast('Testo copiato: incollalo in una chat nuova')).catch(() => toast('Non riesco a leggere istruzioni.txt: apri il sito dal suo link pubblico')); },
+  showPrompt(el) { const b = $('#promptBox'); if (!b.hidden) { b.hidden = true; el.textContent = 'Mostra il testo'; return; } loadIstr().then(t => { b.textContent = takePrompt(t); b.hidden = false; el.textContent = 'Nascondi il testo'; }).catch(() => toast('Non riesco a leggere istruzioni.txt')); },
+  dlPrompt() { loadIstr().then(t => download(`richiesta_${stamp()}.txt`, takePrompt(t))).catch(() => toast('Non riesco a leggere istruzioni.txt')); },
   readAnswer() {
     const text = $('#answer').value; const err = $('#answerErr');
     const fail = m => { err.textContent = m; err.hidden = false; };
     if (!text.trim()) return fail('Incolla prima la risposta della chat.');
     const d = parseOutput(text);
     if (!d.companies.length) return fail(d.params.length ? 'Vedo solo il riepilogo dei parametri. Conferma i parametri in chat e incolla la risposta successiva, quella con le tabelle.' : 'Non trovo la tabella delle aziende. Copia la risposta con il pulsante Copia della chat, così le tabelle restano in formato markdown.');
-    addRun(text, 'chat', $('#platform').value, { ...req });
+    const { t0, tCopy, lastPrompt, lastIstr, ...clean } = req;
+    const run = addRun(text, 'chat', $('#platform').value, clean);
+    run.prompt = lastPrompt || (istr ? buildPrompt(req, istr) : '');
+    run.istr = lastIstr || (istr ? istrVersion(istr) : '');
+    run.t = { start: t0 || null, copy: tCopy || null, output: Date.now(), verified: null };
+    req.t0 = null; req.tCopy = null; req.lastPrompt = null; req.lastIstr = null;
+    saveReq(); saveRuns();
     location.hash = '#/risultati';
   },
   openRun(el) { curId = el.dataset.id; store.set(LS.cur, curId); compareSel = []; fbDraft = null; location.hash = '#/risultati'; },
@@ -1163,24 +1334,40 @@ const ACT = {
   sel(el) { const i = +el.dataset.i; compareSel = el.checked ? [...compareSel, i].slice(0, 3) : compareSel.filter(x => x !== i); rerender(); },
   unsel(el) { compareSel = compareSel.filter(x => x !== +el.dataset.i); rerender(); },
   goCompare() { location.hash = '#/confronto'; },
-  verif(el) { const run = currentRun(); const c = run.data.companies[+el.dataset.i]; run.verif[c.name] = !run.verif[c.name]; saveRuns(); rerender(); },
   chk(el) { const run = currentRun(); run.checks = run.checks || {}; run.checks[el.dataset.i] = el.checked; saveRuns(); el.closest('li').classList.toggle('done', el.checked); },
   csv() {
     const run = currentRun(), d = run.data;
-    const head = ['Priorità', 'Azienda', 'Sede', d.metricLabel || 'Dimensione', 'Cluster', 'Cambiamento', 'Accessibilità', 'Volume', 'Totale', 'Servizio principale', 'Servizio secondario', 'Aggancio al fatto', 'Fonte', 'Stato verifica'];
+    const head = ['Priorità', 'Azienda', 'Sede', d.metricLabel || 'Dimensione', 'Cluster', ...d.criteria.map(k => `${k.name} (su ${k.max})`), 'Totale', 'Servizio principale', 'Servizio secondario', 'Aggancio al fatto', 'Fonte', 'Stato verifica', 'Vincoli rispettati', 'Dati controllati', 'Dati falsi', 'Fonti aperte', 'Fonti valide', 'Note di verifica'];
     const q = v => '"' + plain(v ?? '').replace(/"/g, '""') + '"';
-    const lines = [head.map(q).join(';')].concat(d.companies.map((c, i) => [c.prio ?? i + 1, c.name, c.sede, c.metric, c.cluster, c.c, c.a, c.v, c.tot, c.main, c.second, c.hook, c.fonte, run.verif[c.name] ? 'Verificato' : 'Da verificare'].map(q).join(';')));
+    const lines = [head.map(q).join(';')].concat(d.companies.map((c, i) => { const v = verOf(run, c.name); return [c.prio ?? i + 1, c.name, c.sede, c.metric, c.cluster, ...c.scores, c.tot, c.main, c.second, c.hook, c.fonte, VSTATE[vstate(v)][2], v.vincoli === 'si' ? 'Sì' : v.vincoli === 'no' ? 'No' : '', v.dati, v.falsi, v.fonti, v.valide, v.note].map(q).join(';'); }));
     download(`prospect_${stamp()}.csv`, '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
   },
   dlMd() { const run = currentRun(); download(`output_${stamp()}.md`, run.raw, 'text/markdown;charset=utf-8'); },
   dlRegistro() {
-    const run = currentRun();
-    const log = { data: run.created, origine: run.source === 'esempio' ? 'esempio con dati inventati' : 'output incollato dalla chat', chat: run.platform || null, istruzioni: 'v0', richiesta: run.request, aziende: run.data.companies.length, esclusi: run.data.excluded.length, verificate: Object.keys(run.verif).filter(k => run.verif[k]), verifiche_consigliate_fatte: Object.keys(run.checks || {}).filter(k => run.checks[k]).map(Number), output: run.raw };
-    download(`registro_${stamp()}.json`, JSON.stringify(log, null, 2), 'application/json');
+    const run = currentRun(), d = run.data, t = run.t || {};
+    const iso = x => x ? new Date(x).toISOString() : null;
+    loadIstr().catch(() => null).then(() => {
+      const log = {
+        data: run.created,
+        origine: run.source === 'esempio' ? 'esempio con dati inventati' : 'output incollato dalla chat',
+        chat: run.platform || null,
+        istruzioni: run.istr || null,
+        richiesta: run.request,
+        testo_inviato: run.prompt || null,
+        tempi: { inizio: iso(t.start), testo_copiato: iso(t.copy), output: iso(t.output), ultima_verifica: iso(t.verified), minuti_fino_output: mins(t.start, t.output), minuti_fino_verifica: mins(t.start, t.verified) },
+        criteri: d.criteria,
+        aziende: d.companies.map(c => ({ nome: c.name, priorita: c.prio, punteggi: c.scores, totale: c.tot, stato: VSTATE[vstate(verOf(run, c.name))][2], verifica: verOf(run, c.name) })),
+        esclusi: d.excluded.map(x => ({ nome: x.name, motivo: plain(x.why) })),
+        verifiche_consigliate_fatte: Object.keys(run.checks || {}).filter(k => run.checks[k]).map(Number),
+        misure: measures(run).map(m => ({ ec: m.code, indicatore: m.name, valore: m.val, descrizione: m.value, obiettivo: m.target, in_obiettivo: m.ok, origine: m.how === 'auto' ? 'automatico' : 'verifica dell\'account' })),
+        output: run.raw
+      };
+      download(`registro_${stamp()}.json`, JSON.stringify(log, null, 2), 'application/json');
+    });
   },
   dlScheda(el) {
     const run = currentRun(), d = run.data, c = d.companies[+el.dataset.i], max = maxScore(d);
-    const md = [`# ${c.name}`, '', `- Cluster: ${plain(c.cluster)}`, `- Sede: ${plain(c.sede)}`, `- ${d.metricLabel}: ${plain(c.metric)}`, `- Altri dati: ${plain(c.altri)}`, `- Fonte: ${plain(c.fonte)}`, '', `## Punteggio: ${c.tot}/${max}`, `- Cambiamento: ${c.c}/3`, `- Accessibilità: ${c.a}/3`, `- Volume: ${c.v}/3`, '', '## Fatti recenti', ...c.facts.map(f => '- ' + plain(f)), '', '## Servizi CXI', `- Principale: ${plain(c.main)}`, `- Secondario: ${plain(c.second)}`, `- Aggancio al fatto: ${plain(c.hook)}`, '', '## Interlocutori', ...rolesFor(d, c).map(r => `- ${r.ruolo} (${r.peso}): ${plain(r.interessa)}`), '', run.source === 'esempio' ? '_Dati di esempio, inventati._' : `_Output da ${run.platform}, ${fmtDate(run.created)}: da verificare prima dell'uso._`].join('\n');
+    const md = [`# ${c.name}`, '', `- Cluster: ${plain(c.cluster)}`, `- Sede: ${plain(c.sede)}`, `- ${d.metricLabel}: ${plain(c.metric)}`, `- Altri dati: ${plain(c.altri)}`, `- Fonte: ${plain(c.fonte)}`, '', `## Punteggio: ${c.tot}/${max}`, ...d.criteria.map((k, idx) => `- ${k.name}: ${c.scores[idx] ?? '—'}/${k.max}`), '', '## Fatti recenti', ...c.facts.map(f => '- ' + plain(f)), '', '## Servizi CXI', `- Principale: ${plain(c.main)}`, `- Secondario: ${plain(c.second)}`, `- Aggancio al fatto: ${plain(c.hook)}`, '', '## Interlocutori', ...rolesFor(d, c).map(r => `- ${r.ruolo} (${r.peso}): ${plain(r.interessa)}`), '', '## Verifica dell\'account', `- Stato: ${VSTATE[vstate(verOf(run, c.name))][2]}`, `- Vincoli rispettati: ${{ si: 'sì', no: 'no' }[verOf(run, c.name).vincoli] || 'non ancora verificato'}`, `- Dati controllati: ${verOf(run, c.name).dati ?? '—'}, di cui falsi: ${verOf(run, c.name).falsi ?? '—'}`, `- Fonti aperte: ${verOf(run, c.name).fonti ?? '—'}, valide: ${verOf(run, c.name).valide ?? '—'}`, '', run.source === 'esempio' ? '_Dati di esempio, inventati._' : `_Output da ${run.platform}, ${fmtDate(run.created)}: da verificare prima dell'uso._`].join('\n');
     download(`scheda_${norm(c.name).replace(/ /g, '-')}.md`, md, 'text/markdown;charset=utf-8');
   },
   star(el) { fbDraft[el.dataset.k] = +el.dataset.n; $$(`[data-act="star"][data-k="${el.dataset.k}"]`).forEach(b => { b.classList.toggle('on', +b.dataset.n <= fbDraft[el.dataset.k]); b.setAttribute('aria-pressed', +b.dataset.n === fbDraft[el.dataset.k]); }); },
@@ -1204,20 +1391,23 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const el = e.target;
   if (el.matches('input[type=checkbox][data-act]')) ACT[el.dataset.act](el, e);
+  if (el.matches('input[type=radio][data-ver]')) setVer(el);
   if (el.matches('select[data-act="addCmp"]') && el.value !== '') { compareSel = [...compareSel, +el.value].slice(0, 3); rerender(); }
   if (el.matches('select[data-field]')) { req[el.dataset.field] = el.value; saveReq(); refreshSide(); }
 });
 document.addEventListener('input', e => {
-  const el = e.target; const f = el.dataset.field; if (!f) return;
+  const el = e.target;
+  if (el.dataset.ver && el.type !== 'radio') return setVer(el);
+  const f = el.dataset.field; if (!f) return;
   req[f] = el.type === 'number' ? Math.max(1, Math.min(15, +el.value || 1)) : el.value;
-  saveReq(); refreshSide();
+  startClock(); saveReq(); refreshSide();
 });
 document.addEventListener('submit', e => {
   if (e.target.dataset.form !== 'hero') return;
   e.preventDefault();
   const q = e.target.q.value.trim();
   if (!q) { e.target.q.focus(); return; }
-  req.mode = 'libera'; req.testo = q; saveReq(); location.hash = '#/nuova';
+  req.mode = 'libera'; req.testo = q; startClock(); saveReq(); location.hash = '#/nuova';
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') document.body.classList.remove('menu-open'); });
 route();
