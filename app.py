@@ -86,6 +86,7 @@ def chiama(storia):
         )
     except errors.APIError as e:
         st.error(f"Gemini ha risposto con un errore {e.code} {e.status or ''}: {e.message}")
+        st.expander("Dettagli tecnici").code(json.dumps(e.details, ensure_ascii=False, indent=2), language="json")
         st.stop()
     fonti, ricerche = [], []
     cand = risposta.candidates[0] if risposta.candidates else None
