@@ -147,6 +147,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);bo
 .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid #CDD6E1;background:#fff;border-radius:999px;padding:5px 12px;font-weight:600;font-size:14px;cursor:pointer;color:var(--muted)}
 .chip[aria-pressed="true"]{background:var(--blue-soft);border-color:#AFC6F2;color:var(--blue-ink)}
 .chip svg{width:16px;height:16px}
+.seg{display:inline-flex;flex-wrap:wrap;gap:3px;padding:3px;border:1px solid #CDD6E1;border-radius:10px;background:var(--paper);align-self:flex-start}
+.seg button{border:0;background:transparent;border-radius:7px;padding:6px 12px;font:inherit;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+.seg button[aria-checked="true"]{background:#fff;color:var(--blue-ink);box-shadow:0 1px 3px rgba(23,33,47,.14)}
 .form-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;align-items:center}
 .form-actions .spacer{flex:1}
 .sum{width:100%;border-collapse:collapse;font-size:14px}
@@ -188,6 +191,11 @@ table.res th{text-align:left;font-size:13px;font-weight:600;color:var(--muted);p
 table.res td{padding:12px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle}
 table.res tr:last-child td{border-bottom:0}
 table.res tbody tr:hover{background:#FAFCFF}
+table.res th .sort{display:inline-flex;align-items:center;gap:4px;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;white-space:nowrap}
+table.res th .sort svg{width:15px;height:15px;opacity:.4}
+table.res th .sort:hover,table.res th .sort.on{color:var(--blue-ink)}
+table.res th .sort:hover svg,table.res th .sort.on svg{opacity:1}
+.sortnote{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
 .co{display:flex;align-items:center;gap:12px}
 .co a{font-weight:650;color:var(--ink);text-decoration:none}
 .co a:hover{color:var(--blue-ink);text-decoration:underline}
@@ -329,7 +337,8 @@ table.plain th{color:var(--muted);font-weight:600}
   .notice{padding:10px 16px 0}
   #view{padding:16px 16px 40px}
   .foot{padding:16px}
-  .form-grid,.run-grid,.res-grid,.det-top,.fb-grid{grid-template-columns:1fr}
+  .form-grid,.run-grid,.res-grid,.det-top,.fb-grid{grid-template-columns:minmax(0,1fr)}
+  .tabs{overflow-x:auto}
   .side-col{position:static}
   .det-grid{grid-template-columns:1fr}
   .entry,.examples{grid-template-columns:1fr}
@@ -418,7 +427,10 @@ const ICONS = {
   pin:'<path d="M12 21s-6-5.3-6-11a6 6 0 0 1 12 0c0 5.7-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>',
   people:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.6-5.5 6.5-5.5s5.5 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.7.8 2.9 2.6 3.5 5.2"/>',
   doc:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
-  trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'
+  trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  up:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+  down:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+  updown:'<path d="M8 20V4M4 8l4-4 4 4M16 4v16M12 16l4 4 4-4"/>'
 };
 const ic = (n, cls) => `<svg class="i${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 const $ = (s, r = document) => r.querySelector(s);
@@ -446,13 +458,13 @@ const EXAMPLE_MD = `Parametri usati
 
 **Tabella 1 – New names**
 
-| Azienda | Sede | Numero di clienti (anno) | Altri dati chiave | Fonte (livello) |
-| --- | --- | --- | --- | --- |
-| Valtellux Energia S.p.A. | Sondrio (SO) | 860.000 (2025) | Fatturato circa 1,1 mld € (2025); contact center interno e 12 sportelli | Relazione annuale 2025 (A) |
-| Brennergy S.p.A. | Bolzano (BZ) | 780.000 (2025) | Attiva anche in Trentino e Veneto; app clienti lanciata nel 2025 | Sito ufficiale, area investitori (A) |
-| Lagoverde Luce e Gas S.r.l. | Como (CO) | 530.000 (2025) | Controllata da una multiutility comunale; 40 sportelli in Lombardia | Bilancio 2025 depositato (A) |
-| Orovia Multiutility S.p.A. | Brescia (BS) | 2,1 milioni (2025) | Energia, acqua e ambiente; quotata in Borsa | Relazione finanziaria annuale 2025 (A) |
-| Pianura Energia S.p.A. | Verona (VR) | 1,6 milioni (2024, da aggiornare) | Solo canali digitali, nessuno sportello | Comunicato stampa ufficiale, marzo 2024 (A) |
+| Azienda | Sede | Numero di clienti (anno) | Fatturato (anno) | Altri dati chiave | Fonte (livello) |
+| --- | --- | --- | --- | --- | --- |
+| Valtellux Energia S.p.A. | Sondrio (SO) | 860.000 (2025) | 1,1 mld € (2025) | Contact center interno e 12 sportelli | Relazione annuale 2025 (A) |
+| Brennergy S.p.A. | Bolzano (BZ) | 780.000 (2025) | 640 mln € (2025) | Attiva anche in Trentino e Veneto; app clienti lanciata nel 2025 | Sito ufficiale, area investitori (A) |
+| Lagoverde Luce e Gas S.r.l. | Como (CO) | 530.000 (2025) | 310 mln € (2025) | Controllata da una multiutility comunale; 40 sportelli in Lombardia | Bilancio 2025 depositato (A) |
+| Orovia Multiutility S.p.A. | Brescia (BS) | 2,1 milioni (2025) | 2,4 mld € (2025) | Energia, acqua e ambiente; quotata in Borsa | Relazione finanziaria annuale 2025 (A) |
+| Pianura Energia S.p.A. | Verona (VR) | 1,6 milioni (2024, da aggiornare) | 950 mln € (2024, da aggiornare) | Solo canali digitali, nessuno sportello | Comunicato stampa ufficiale, marzo 2024 (A) |
 
 **Candidati esclusi**
 
@@ -464,7 +476,7 @@ const EXAMPLE_MD = `Parametri usati
 
 **Tabella 2 – Clusterizzazione e priorità**
 
-Priorità con il modello di default CXI. Soglie del Volume: 1 = da 500.000 a 749.999 clienti, 2 = da 750.000 a 1.499.999, 3 = da 1,5 milioni in su. A parità di totale viene prima chi ha più Cambiamento, poi chi ha più Accessibilità.
+Nessun criterio indicato dall'account: priorità con il modello di default CXI, da 1 a 3 per criterio. Soglie del Volume: 1 = da 500.000 a 749.999 clienti, 2 = da 750.000 a 1.499.999, 3 = da 1,5 milioni in su. A parità di totale viene prima chi ha più Cambiamento, poi chi ha più Accessibilità.
 
 | Priorità | Azienda | Cluster | Cambiamento | Accessibilità | Volume | Totale |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -510,7 +522,7 @@ Priorità con il modello di default CXI. Soglie del Volume: 1 = da 500.000 a 749
 3. Esternalizzazione del contact center di Orovia: fonte secondaria, cercare un comunicato ufficiale.
 4. Sede legale di Brennergy: controllarla nel registro delle imprese.`;
 
-const DEFAULT_REQ = { mode: 'guidata', settore: '', area: '', metrica: 'Numero di clienti', soglia: '', nomi: 5, prio: ['Cambiamento', 'Accessibilità', 'Volume'], prioAltro: '', qualitativi: '', tema: '', esclusioni: '', altro: '', testo: '' };
+const DEFAULT_REQ = { mode: 'guidata', settore: '', area: '', metrica: 'Numero di clienti', soglia: '', nomi: 5, prioMode: 'default', prio: [], prioAltro: '', qualitativi: '', tema: '', esclusioni: '', altro: '', testo: '' };
 const CASE1 = { ...DEFAULT_REQ, settore: 'aziende che vendono luce e gas a famiglie e piccole imprese', area: 'Nord Italia', metrica: 'Numero di clienti', soglia: 'almeno 500.000', nomi: 5, qualitativi: 'gestiscono grandi volumi di contatti con i clienti' };
 const EXAMPLES = [
   'Trova 5 aziende del settore energy retail nel Nord Italia con almeno 500.000 clienti, da ordinare per attrattività commerciale.',
@@ -518,10 +530,13 @@ const EXAMPLES = [
 ];
 const PRIO_ALL = ['Cambiamento', 'Accessibilità', 'Volume'];
 
-let req = { ...DEFAULT_REQ, ...store.get(LS.req, {}) };
+const storedReq = store.get(LS.req, {});
+let req = { ...DEFAULT_REQ, ...storedReq };
+if (!storedReq.prioMode) { req.prioMode = (req.prio.length && req.prio.length < 3) || req.prioAltro.trim() ? 'mie' : 'default'; if (req.prioMode === 'default') req.prio = []; }
 let runs = store.get(LS.runs, []);
 let curId = store.get(LS.cur, null);
 let compareSel = [];
+let sortBy = { k: 'prio', dir: 1 };
 let fbDraft = null;
 let istr = null;
 
@@ -540,6 +555,22 @@ function same(a, b) {
   return wa === wb && wa.length > 3 && !GENERIC.includes(wa);
 }
 const num = s => { const m = String(s ?? '').match(/\d+/); return m ? +m[0] : null; };
+const isScore = s => /^\s*\d{1,2}(\s*\/\s*\d{1,2})?(\s*\(.*\))?\s*$/.test(plain(s));
+function amount(s) {
+  let t = plain(s).toLowerCase();
+  if (!/\d/.test(t)) return null;
+  t = t.replace(/\(\s*(19|20)\d{2}[^)]*\)/g, ' ').replace(/(^|[^\d.,])(?:19|20)\d{2}(?![\d.,]|\s*(mld|mln|milion|miliard|mio|bn|€|eur|dipend|client|addett|utent))/g, '$1 ');
+  const m = t.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)(?:,(\d+)|\.(\d{1,2})(?!\d))?\s*(mld|miliard\w*|bn|billion\w*|mln|milion\w*|million\w*|mio|mn|m(?=\s*(?:€|eur))|k|mila|migliaia)?/);
+  if (!m) return null;
+  let v = parseFloat(m[1].replace(/[.\s]/g, '') + '.' + (m[2] || m[3] || '0'));
+  const u = m[4] || '';
+  if (/^(mld|miliard|bn|billion)/.test(u)) v *= 1e9;
+  else if (/^(mln|milion|million|mio|mn|m)/.test(u)) v *= 1e6;
+  else if (/^(k|mila|migliaia)/.test(u)) v *= 1e3;
+  return v;
+}
+const FAT_RE = /fatturat|ricav|giro d affari/;
+const fatFrom = s => { const m = plain(s).match(/(fatturato|ricavi|giro d'affari)[^;]*/i); return m ? m[0].replace(/^(fatturato|ricavi|giro d'affari)\s*:?\s*/i, '').trim() : ''; };
 const col = (head, re) => head.findIndex(h => re.test(norm(h)));
 function splitRow(l) {
   let s = l.trim();
@@ -588,26 +619,35 @@ function parseOutput(text) {
   const { tables, lines } = parseTables(text);
   const by = {};
   tables.forEach(t => { const k = kind(t); if (!by[k]) by[k] = t; });
-  const d = { params: [], companies: [], excluded: [], roles: [], logic: '', checks: [], metricLabel: '', criteria: [] };
+  const d = { params: [], companies: [], excluded: [], roles: [], logic: '', checks: [], metricLabel: '', fatLabel: 'Fatturato', showFat: false, criteria: [] };
   const comps = d.companies;
   const find = name => comps.find(c => same(c.name, name));
-  const blank = name => ({ name, sede: '', metric: '', altri: '', fonte: '', facts: [], cluster: '', scores: [], tot: null, prio: null, main: '', second: '', hook: '' });
+  const blank = name => ({ name, sede: '', metric: '', fat: '', altri: '', fonte: '', facts: [], cluster: '', scores: [], tot: null, prio: null, main: '', second: '', hook: '' });
   if (by.params) d.params = by.params.body.map(r => [plain(r[0]), r[1] || '']);
   if (by.t1) {
     const h = by.t1.head;
     const iN = Math.max(0, col(h, /aziend|nome|societ/)), iS = col(h, /sede/), iF = col(h, /fonte/), iA = col(h, /altri|dati chiave/);
-    const iM = h.findIndex((x, j) => ![iN, iS, iF, iA].includes(j));
-    d.metricLabel = iM >= 0 ? plain(h[iM]).replace(/\s*\((anno|con anno)\)\s*/i, ' ').trim() : 'Dimensione';
+    const iRs = h.map((x, j) => j).filter(j => FAT_RE.test(norm(h[j])) && ![iN, iS, iF, iA].includes(j)), iR = iRs.length ? iRs[0] : -1;
+    let iM = h.findIndex((x, j) => ![iN, iS, iF, iA, ...iRs].includes(j));
+    if (iM < 0) iM = iR;
+    const lbl = j => plain(h[j]).replace(/\s*\((anno|con anno)\)\s*/i, ' ').trim();
+    d.metricLabel = iM >= 0 ? lbl(iM) : 'Dimensione';
+    if (iR >= 0) d.fatLabel = lbl(iR);
     by.t1.body.forEach(r => {
       const name = plain(r[iN]); if (!name) return;
-      comps.push({ ...blank(name), sede: iS >= 0 ? r[iS] || '' : '', metric: iM >= 0 ? r[iM] || '' : '', altri: iA >= 0 ? r[iA] || '' : '', fonte: iF >= 0 ? r[iF] || '' : '' });
+      const altri = iA >= 0 ? r[iA] || '' : '';
+      comps.push({ ...blank(name), sede: iS >= 0 ? r[iS] || '' : '', metric: iM >= 0 ? r[iM] || '' : '', fat: iR >= 0 ? r[iR] || '' : fatFrom(altri), altri, fonte: iF >= 0 ? r[iF] || '' : '' });
     });
+    d.showFat = iM !== iR && !FAT_RE.test(norm(d.metricLabel)) && comps.some(c => amount(c.fat) != null);
   }
   if (by.t2) {
     const h = by.t2.head;
-    const iP = col(h, /priorit/), iN0 = col(h, /aziend|nome|societ/), iC = col(h, /cluster/), iT = col(h, /totale|punteggio/);
+    const iP = col(h, /priorit/), iN0 = col(h, /aziend|nome|societ/), iC = col(h, /cluster/), iT0 = col(h, /totale/), iT = iT0 >= 0 ? iT0 : col(h, /punteggio/);
     const iN = iN0 >= 0 ? iN0 : 1;
-    const crit = h.map((_, j) => j).filter(j => ![iP, iN, iC, iT].includes(j));
+    const crit = h.map((_, j) => j).filter(j => ![iP, iN, iC, iT].includes(j)).filter(j => {
+      const v = by.t2.body.map(r => r[j]).filter(x => plain(x));
+      return v.length && v.filter(isScore).length * 2 >= v.length;
+    });
     d.criteria = crit.map(j => ({ name: plain(h[j]), max: 3 }));
     by.t2.body.forEach((r, k) => {
       const name = plain(r[iN]); if (!name) return;
@@ -700,11 +740,15 @@ function copyText(text) {
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 
 /* ---------- richiesta e prompt ---------- */
-const prioText = r => {
-  const custom = r.prioAltro.trim();
-  if (r.prio.length === 3 && !custom) return '';
-  return [r.prio.length ? 'solo questi criteri: ' + r.prio.join(', ') : '', custom].filter(Boolean).join('; ');
-};
+const prioList = r => r.prioMode === 'mie' ? [...r.prio, ...r.prioAltro.split(/;|\n/).map(x => x.trim())].filter(Boolean) : [];
+const prioText = r => { const l = prioList(r); return l.length ? `indicati dall'account, usa solo questi e in quest'ordine: ${l.join('; ')}` : ''; };
+const GO = 'Esegui il passo 0 e poi, senza chiedere conferma e senza fermarti, i passi da 1 a 5: restituisci tutto in un\'unica risposta nel formato della sezione 6, con le tabelle in markdown.';
+function orderHint(text) {
+  const m = String(text || '').match(/\b(?:ordin\w*|classific\w*|priorità|priorita)\s+(?:(?:per|secondo|in base a|in base al|in base alla|di|del|della|al|alla|ai|alle|allo|a|sul|sulla|dal|dalla)\s+)+([^.;:,\n]{2,60})/i);
+  if (!m) return null;
+  const c = m[1].trim();
+  return /^(priorit|attrattiv|potenzial|interess|importanz|rilevanz|opportunit)/i.test(c) ? 'generico' : c;
+}
 function reqReady(r = req) {
   return r.mode === 'libera' ? r.testo.trim().length > 10 : !!(r.settore.trim() && r.area.trim() && r.soglia.trim());
 }
@@ -715,7 +759,7 @@ function reqTitle(r = req) {
 function buildPrompt(r, istruzioni) {
   const p = [istruzioni.trim(), '', '---', '', 'Nuova richiesta di prevendita.', ''];
   if (r.mode === 'libera') {
-    p.push('Richiesta descritta a parole dall\'account:', r.testo.trim(), '', 'Esegui il passo 0: riepiloga i parametri in una tabella, poi fermati e chiedi conferma. Dopo la conferma esegui i passi da 1 a 5 e restituisci l\'output nel formato della sezione 6, con le tabelle in markdown.');
+    p.push('Richiesta descritta a parole dall\'account:', r.testo.trim(), '', 'Criteri di priorità: se in questa richiesta indico come ordinare le aziende (per esempio per fatturato), usa solo i criteri che indico, ciascuno con punteggio da 1 a 3, e non il modello di default. Se non lo indico, o chiedo solo un ordine generico come "per priorità", usa il modello di default.', '', GO);
   } else {
     p.push('Obbligatori',
       `- Settore o attività: ${r.settore.trim()}`,
@@ -723,12 +767,12 @@ function buildPrompt(r, istruzioni) {
       `- Dimensione, metrica e soglia: ${r.metrica}, ${r.soglia.trim()}`,
       `- Numero di nomi: almeno ${r.nomi}`,
       '', 'Facoltativi',
-      `- Criteri di priorità: ${prioText(r) || 'non indicati (usa il modello di default)'}`,
+      `- Criteri di priorità: ${prioText(r) || 'non indicati (usa il modello di default: Cambiamento, Accessibilità, Volume)'}`,
       `- Criteri qualitativi: ${r.qualitativi.trim() || 'non indicati'}`,
       `- Tema del progetto da proporre: ${r.tema.trim() || 'non indicato'}`,
       `- Aziende da escludere: ${r.esclusioni.trim() || 'nessuna'}`);
     if (r.altro.trim()) p.push('', 'Testo libero: ' + r.altro.trim());
-    p.push('', 'Ho già controllato questi parametri nel modulo: procedi senza conferma. Mostra comunque il riepilogo, poi esegui i passi da 1 a 5 e restituisci l\'output nel formato della sezione 6, con le tabelle in markdown.');
+    p.push('', 'Ho già controllato questi parametri nel modulo.', GO);
   }
   return p.join('\n');
 }
@@ -747,13 +791,13 @@ function currentRun() {
 function addRun(raw, source, platform, request) {
   const run = { id: Date.now().toString(36), created: new Date().toISOString(), source, platform, request, raw, ver: {}, checks: {} };
   run.data = parseOutput(raw);
-  runs.unshift(run); curId = run.id; compareSel = []; fbDraft = null;
+  runs.unshift(run); curId = run.id; compareSel = []; fbDraft = null; sortBy = { k: 'prio', dir: 1 };
   saveRuns(); store.set(LS.cur, curId);
   return run;
 }
 function openExample() {
   const ex = runs.find(r => r.source === 'esempio');
-  if (ex) { if (ex.raw !== EXAMPLE_MD) { ex.raw = EXAMPLE_MD; ex.data = null; ex.ver = {}; ex.checks = {}; saveRuns(); } curId = ex.id; store.set(LS.cur, curId); compareSel = []; fbDraft = null; }
+  if (ex) { if (ex.raw !== EXAMPLE_MD) { ex.raw = EXAMPLE_MD; ex.data = null; ex.ver = {}; ex.checks = {}; saveRuns(); } curId = ex.id; store.set(LS.cur, curId); compareSel = []; fbDraft = null; sortBy = { k: 'prio', dir: 1 }; }
   else addRun(EXAMPLE_MD, 'esempio', '', { ...CASE1 });
   location.hash = '#/risultati';
 }
@@ -987,7 +1031,7 @@ function summaryRows() {
     ['Area geografica', v(r.area, 1)],
     ['Dimensione', r.soglia.trim() ? esc(r.metrica + ', ' + r.soglia) : '<span class="miss">da compilare</span>'],
     ['Numero minimo di aziende', esc(r.nomi)],
-    ['Criteri di priorità', prioText(r) ? esc(prioText(r)) : def('Modello di default CXI: Cambiamento, Accessibilità, Volume')],
+    ['Criteri di priorità', prioList(r).length ? 'Solo i tuoi, in quest\'ordine: ' + prioList(r).map((x, i) => `${i + 1}. ${esc(x)}`).join('; ') + ' (da 1 a 3 ciascuno)' : def(r.prioMode === 'mie' ? 'Nessun criterio scelto: modello di default CXI' : 'Modello di default CXI: Cambiamento, Accessibilità, Volume')],
     ['Criteri qualitativi', v(r.qualitativi) || def('Non indicati')],
     ['Tema del progetto', v(r.tema) || def('Non indicato: servizi scelti in base ai fatti')],
     ['Esclusioni', v(r.esclusioni) || def('Nessuna')]
@@ -999,7 +1043,9 @@ function checkItems() {
   if (r.mode === 'libera') {
     if (r.testo.trim().length < 30) out.push(['w', 'Descrivi almeno settore, area geografica e una soglia di dimensione.']);
     else if (!/\d/.test(r.testo)) out.push(['w', 'Non vedo numeri: senza una soglia di dimensione l\'agent non può verificare il vincolo.']);
-    out.push(['n', 'Il riepilogo dei parametri lo compila l\'agent al passo 0: te lo mostra in chat per conferma.']);
+    const h = orderHint(r.testo);
+    out.push(['n', !h ? 'Non hai indicato come ordinare le aziende: l\'agent userà il modello di default (Cambiamento, Accessibilità, Volume).' : h === 'generico' ? 'Hai chiesto un ordine generico: l\'agent userà il modello di default (Cambiamento, Accessibilità, Volume).' : `Hai chiesto di ordinare per «${esc(h)}»: l'agent userà i criteri che hai indicato, ciascuno da 1 a 3, al posto del modello di default.`]);
+    out.push(['n', 'L\'agent riepiloga i parametri all\'inizio dell\'output e prosegue senza chiedere conferma: li ritrovi nei risultati, in «Parametri usati dall\'agent».']);
     return out;
   }
   if (!r.settore.trim()) out.push(['w', 'Manca il settore: è obbligatorio.']);
@@ -1007,14 +1053,15 @@ function checkItems() {
   if (!r.soglia.trim()) out.push(['w', 'Manca la soglia di dimensione: senza un numero l\'agent non può verificare il vincolo.']);
   else if (!/\d/.test(r.soglia)) out.push(['w', 'La soglia non contiene un numero: scrivi per esempio «almeno 500.000».']);
   if (+r.nomi > 10) out.push(['n', 'Con più di 10 aziende la verifica a campione richiede più tempo.']);
-  if (!r.prio.length && !r.prioAltro.trim()) out.push(['n', 'Nessun criterio di priorità selezionato: l\'agent userà il modello di default.']);
+  if (r.prioMode === 'mie' && !prioList(r).length) out.push(['n', 'Non hai scelto criteri di priorità: l\'agent userà il modello di default.']);
+  else if (prioList(r).length) out.push(['n', `L'agent ordinerà solo con ${prioList(r).length > 1 ? 'i tuoi criteri' : 'il tuo criterio'}, da 1 a 3 ciascuno, e non con il modello di default.`]);
   if (!r.tema.trim()) out.push(['n', 'Senza un tema del progetto, l\'agent sceglie i servizi CXI in base ai fatti che trova.']);
   if (!out.some(x => x[0] === 'w')) out.unshift(['k', 'I parametri obbligatori ci sono.']);
   return out;
 }
 const checksHTML = () => `<ul class="checks">${checkItems().map(([t, x]) => `<li class="${t}">${ic(t === 'w' ? 'alert' : t === 'k' ? 'checkc' : 'info')}<span>${x}</span></li>`).join('')}</ul>`;
 function refreshSide() { const s = $('#sumBox'); if (s) s.innerHTML = req.mode === 'libera' ? libSummary() : summaryRows(); const c = $('#chkBox'); if (c) c.innerHTML = checksHTML(); }
-const libSummary = () => `<p class="muted small">Con la richiesta a parole il riepilogo lo compila l'agent al passo 0, e te lo mostra in chat per conferma prima di cercare.</p>`;
+const libSummary = () => `<p class="muted small">Con la richiesta a parole il riepilogo lo compila l'agent al passo 0, all'inizio dell'output, e poi parte subito con la ricerca senza chiederti conferma. Lo ritrovi nei risultati, in «Parametri usati dall'agent».</p>`;
 
 function viewNuova() {
   const g = req.mode !== 'libera';
@@ -1030,9 +1077,10 @@ function viewNuova() {
         </div></div>
       ${f('tema', 'Obiettivo commerciale (tema del progetto)', 'es. migliorare il customer care; BDC e gestione dei lead', { full: 1 })}
       <div class="field full"><span class="lbl" id="l-prio">Criteri di priorità</span>
-        <div class="chips" role="group" aria-labelledby="l-prio">${PRIO_ALL.map(p => `<button type="button" class="chip" data-act="prio" data-v="${p}" aria-pressed="${req.prio.includes(p)}">${req.prio.includes(p) ? ic('check') : ic('plus')}${p}</button>`).join('')}</div>
-        <input type="text" data-field="prioAltro" value="${esc(req.prioAltro)}" placeholder="Altri criteri (facoltativo), es. presenza di un contact center interno" aria-label="Altri criteri di priorità">
-        <span class="hint">I tre criteri selezionati sono il modello di default CXI: punteggio da 1 a 3 ciascuno, totale su 9.</span></div>
+        <div class="seg" role="radiogroup" aria-labelledby="l-prio"><button type="button" role="radio" aria-checked="${req.prioMode !== 'mie'}" data-act="prioMode" data-v="default">Modello di default CXI</button><button type="button" role="radio" aria-checked="${req.prioMode === 'mie'}" data-act="prioMode" data-v="mie">Scelgo io i criteri</button></div>
+        ${req.prioMode === 'mie' ? `<div class="chips" role="group" aria-label="Criteri del modello CXI da usare">${PRIO_ALL.map(p => `<button type="button" class="chip" data-act="prio" data-v="${p}" aria-pressed="${req.prio.includes(p)}">${req.prio.includes(p) ? ic('check') : ic('plus')}${p}</button>`).join('')}</div>
+        <input type="text" data-field="prioAltro" value="${esc(req.prioAltro)}" placeholder="Altri criteri, in ordine di importanza: es. fatturato; contact center interno" aria-label="Altri criteri di priorità">
+        <span class="hint">L'agent usa solo questi criteri: prima quelli selezionati, nell'ordine in cui li selezioni, poi quelli scritti. Ciascuno vale da 1 a 3, il totale è la somma; a parità vince il primo criterio.</span>` : `<span class="hint">Cambiamento, Accessibilità e Volume, da 1 a 3 ciascuno (totale su 9). È il modello che l'agent usa quando non indichi criteri.</span>`}</div>
       ${f('qualitativi', 'Criteri qualitativi', 'es. gestiscono grandi volumi di contatti con i clienti')}
       ${f('esclusioni', 'Aziende da escludere', 'es. clienti attuali di CXI')}
       ${f('altro', 'Ulteriori indicazioni', 'es. preferisci operatori in crescita', { full: 1, area: 1 })}
@@ -1057,7 +1105,7 @@ function viewNuova() {
       </div>
     </section>
     <div class="side-col">
-      <section class="panel"><h2>${ic('doc')}Riepilogo della richiesta</h2><div id="sumBox">${g ? summaryRows() : libSummary()}</div>${g ? '<p class="muted small" style="margin-top:10px">È il controllo 1: l\'agent lo ripete in chat prima di cercare.</p>' : ''}</section>
+      <section class="panel"><h2>${ic('doc')}Riepilogo della richiesta</h2><div id="sumBox">${g ? summaryRows() : libSummary()}</div>${g ? '<p class="muted small" style="margin-top:10px">È il controllo 1: l\'agent lo ripete all\'inizio dell\'output, senza fermarsi a chiedere conferma.</p>' : ''}</section>
       <section class="panel"><h2>${ic('bulb')}Controlli sulla richiesta</h2><div id="chkBox">${checksHTML()}</div><p class="muted small" style="margin-top:12px">Controlli a regole fisse, non generati dall'AI.</p></section>
     </div>
   </div>`;
@@ -1077,7 +1125,7 @@ function viewEsegui() {
         <li><h3>Copia il testo per la chat</h3><p>Contiene le istruzioni dell'agent (istruzioni.txt) e la tua richiesta.${req.t0 ? ` Il cronometro della ricerca (EC18) è partito alle ${new Date(req.t0).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e si ferma quando hai verificato tutte le aziende.` : ''}</p>
           <div class="row"><button class="btn primary" data-act="copyPrompt"${ready ? '' : ' disabled'}>${ic('copy')}Copia il testo</button><button class="btn" data-act="showPrompt"${ready ? '' : ' disabled'}>Mostra il testo</button><button class="btn ghost" data-act="dlPrompt"${ready ? '' : ' disabled'}>${ic('download')}Scarica .txt</button></div>
           <pre class="prompt" id="promptBox" hidden></pre></li>
-        <li><h3>Incollalo in una chat nuova</h3><p>${libera ? 'La chat ti mostrerà il riepilogo dei parametri: conferma o correggi, poi aspetta l\'output completo.' : 'La chat mostrerà il riepilogo dei parametri e procederà senza chiedere conferma.'} Se la chat ha un interruttore per la ricerca web, attivalo.</p>
+        <li><h3>Incollalo in una chat nuova</h3><p>La chat riepiloga i parametri e prosegue senza chiederti conferma: aspetta l'output completo, con tutte le tabelle. Se la chat ha un interruttore per la ricerca web, attivalo. Su Gemini non usare Deep Research: prima di partire mostra un piano e chiede di avviarlo.</p>
           <div class="row"><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini${ic('external')}</a><a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT${ic('external')}</a><a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">Claude${ic('external')}</a></div></li>
         <li><h3>Incolla qui la risposta</h3><p>Copiala con il pulsante Copia della chat: così le tabelle restano leggibili.</p>
           <div class="field" style="max-width:260px;margin-bottom:10px"><label for="platform">Chat usata</label><select id="platform">${['Gemini', 'ChatGPT', 'Claude', 'Altra chat'].map(x => `<option>${x}</option>`).join('')}</select></div>
@@ -1102,13 +1150,29 @@ function viewRisultati() {
   if (!run) return `<div class="page-head"><h1>Risultati</h1></div>` + emptyState('Non c\'è ancora un risultato da mostrare.');
   const d = run.data, max = maxScore(d);
   const sel = compareSel;
-  const rows = d.companies.map((c, i) => {
+  const metricNum = d.companies.some(c => amount(c.metric) != null);
+  const SORT = { prio: ['priorità', c => c.prio], metric: [d.metricLabel || 'dimensione', c => amount(c.metric)], fat: [d.fatLabel || 'fatturato', c => amount(c.fat)], tot: ['punteggio', c => c.tot] };
+  if (!SORT[sortBy.k] || (sortBy.k === 'metric' && !metricNum) || (sortBy.k === 'fat' && !d.showFat)) sortBy = { k: 'prio', dir: 1 };
+  const order = d.companies.map((_, i) => i);
+  if (sortBy.k !== 'prio') {
+    const f = SORT[sortBy.k][1];
+    order.sort((a, b) => { const A = f(d.companies[a]), B = f(d.companies[b]); if (A == null || B == null) return (A == null) - (B == null) || a - b; return (A - B) * sortBy.dir || a - b; });
+  }
+  const sth = (k, label) => {
+    const on = sortBy.k === k, dirName = k === 'prio' ? 'dalla prima' : sortBy.dir < 0 ? 'dal più alto' : 'dal più basso';
+    const tip = k === 'prio' ? 'Torna all\'ordine di priorità dell\'agent' : on ? `Ordinate per ${SORT[k][0]}, ${dirName}: clicca per invertire` : `Ordina per ${SORT[k][0]}, dal più alto`;
+    return `<th aria-sort="${on ? (k === 'prio' || sortBy.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="sort${on ? ' on' : ''}" data-act="sort" data-k="${k}" title="${esc(tip)}">${label}${ic(on && k !== 'prio' ? (sortBy.dir < 0 ? 'down' : 'up') : on ? 'up' : 'updown')}</button></th>`;
+  };
+  const sortNote = sortBy.k === 'prio' ? 'Seleziona fino a 3 aziende per confrontarle. Clicca sulle frecce per ordinare la tabella.' : `<span class="sortnote">Ordinate per ${esc(SORT[sortBy.k][0])}, ${sortBy.dir < 0 ? 'dal più alto' : 'dal più basso'}; la colonna # resta la priorità dell'agent. <button class="btn ghost sm" data-act="sort" data-k="prio">Torna all'ordine di priorità</button></span>`;
+  const rows = order.map(i => {
+    const c = d.companies[i];
     return `<tr>
       <td><input type="checkbox" data-act="sel" data-i="${i}" ${sel.includes(i) ? 'checked' : ''} ${!sel.includes(i) && sel.length >= 3 ? 'disabled' : ''} aria-label="Seleziona ${esc(c.name)} per il confronto"></td>
       <td class="prio">${c.prio ?? i + 1}</td>
       <td><div class="co">${avatar(c.name)}<div><a href="#/azienda/${i}">${esc(c.name)}</a><small>${esc(plain(c.sede)) || '—'}</small></div></div></td>
       <td>${esc(c.cluster) || '—'}</td>
       <td>${inline(c.metric) || '—'}</td>
+      ${d.showFat ? `<td>${inline(c.fat) || '—'}</td>` : ''}
       <td>${c.tot != null ? `<div class="score"><b>${c.tot}<small>/${max}</small></b>${bar(c.tot, max)}</div>` : '—'}</td>
       <td><a class="nolink" href="#/azienda/${i}/verifica" title="Apri la verifica di questa azienda">${vpill(verOf(run, c.name))}</a></td>
       <td><a class="btn sm" href="#/azienda/${i}">Vedi dettagli</a></td></tr>`;
@@ -1119,10 +1183,11 @@ function viewRisultati() {
     <div class="row no-print"><button class="btn" data-act="csv">${ic('download')}Esporta in Excel (.csv)</button><button class="btn ghost" data-act="dlRegistro">Scarica il registro (.json)</button></div>
   </div>
   ${sourceLine(run)}
+  ${/senza ricerca web/i.test(run.raw) ? `<div class="strip red">${ic('alert')}<span>La chat ha lavorato senza ricerca web: i dati vengono dalla memoria del modello e vanno verificati tutti. Meglio rifare la ricerca con la ricerca web attiva.</span></div>` : ''}
   ${d.logic ? `<p class="logic">${ic('info')}<span>${inline(d.logic)}</span></p>` : ''}
   ${d.companies.length ? `<section class="panel" style="padding:0">
-    <div class="tablebar"><span class="grow muted small">Seleziona fino a 3 aziende per confrontarle. Lo stato di verifica lo compili tu nella scheda di ogni azienda.</span><button class="btn sm blue" data-act="goCompare" ${sel.length < 2 ? 'disabled' : ''}>${ic('compare')}Confronta (${sel.length})</button></div>
-    <div class="table-wrap"><table class="res"><thead><tr><th><span class="sr">Seleziona</span></th><th>#</th><th>Azienda</th><th>Cluster</th><th>${esc(d.metricLabel || 'Dimensione')}</th><th>Punteggio</th><th>Stato verifica</th><th><span class="sr">Azioni</span></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tablebar"><span class="grow muted small">${sortNote}</span><button class="btn sm blue" data-act="goCompare" ${sel.length < 2 ? 'disabled' : ''}>${ic('compare')}Confronta (${sel.length})</button></div>
+    <div class="table-wrap"><table class="res"><thead><tr><th><span class="sr">Seleziona</span></th>${sth('prio', '#')}<th>Azienda</th><th>Cluster</th>${metricNum ? sth('metric', esc(d.metricLabel || 'Dimensione')) : `<th>${esc(d.metricLabel || 'Dimensione')}</th>`}${d.showFat ? sth('fat', esc(d.fatLabel)) : ''}${sth('tot', 'Punteggio')}<th>Stato verifica</th><th><span class="sr">Azioni</span></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>` : `<div class="strip red">${ic('alert')}<span>Nell'output non ho trovato la tabella delle aziende.</span></div>`}
   <div class="res-grid">
     <section class="panel"><h2>${ic('checkc')}Verifiche consigliate</h2>
@@ -1155,6 +1220,7 @@ function viewAzienda(arg) {
         ${c.cluster ? `<li>${ic('target')}<span>Cluster: ${esc(c.cluster)}</span></li>` : ''}
         <li>${ic('pin')}<span>Sede: ${inline(c.sede) || 'non trovata'}</span></li>
         <li>${ic('people')}<span>${esc(d.metricLabel || 'Dimensione')}: ${inline(c.metric) || 'non trovato'}</span></li>
+        ${d.showFat ? `<li>${ic('chart')}<span>${esc(d.fatLabel)}: ${inline(c.fat) || 'non trovato'}</span></li>` : ''}
         <li>${ic('doc')}<span>Fonte: ${lvlBadge(c.fonte)}${inline(c.fonte) || 'non indicata'}</span></li>
       </ul></div></div></section>
     <section class="panel"><h2>${ic('chart')}Punteggio di priorità</h2>
@@ -1166,7 +1232,7 @@ function viewAzienda(arg) {
   </div>
   <div class="det-grid">
     <section class="panel"><h2>${ic('info')}Informazioni chiave</h2>
-      <dl class="kv"><dt>Cluster</dt><dd>${esc(c.cluster) || '—'}</dd><dt>${esc(d.metricLabel || 'Dimensione')}</dt><dd>${inline(c.metric) || '—'}</dd><dt>Sede</dt><dd>${inline(c.sede) || '—'}</dd><dt>Altri dati</dt><dd>${inline(c.altri) || '—'}</dd><dt>Fonte</dt><dd>${lvlBadge(c.fonte)}${inline(c.fonte) || '—'}</dd></dl></section>
+      <dl class="kv"><dt>Cluster</dt><dd>${esc(c.cluster) || '—'}</dd><dt>${esc(d.metricLabel || 'Dimensione')}</dt><dd>${inline(c.metric) || '—'}</dd>${d.showFat ? `<dt>${esc(d.fatLabel)}</dt><dd>${inline(c.fat) || '—'}</dd>` : ''}<dt>Sede</dt><dd>${inline(c.sede) || '—'}</dd><dt>Altri dati</dt><dd>${inline(c.altri) || '—'}</dd><dt>Fonte</dt><dd>${lvlBadge(c.fonte)}${inline(c.fonte) || '—'}</dd></dl></section>
     <section class="panel"><h2>${ic('bulb')}Fatti recenti</h2>
       ${c.facts.length ? `<ul class="facts">${c.facts.map(f => `<li>${lvlBadge(f)}${inline(f)}</li>`).join('')}</ul>` : '<p class="muted">Nessun fatto riportato per questa azienda.</p>'}</section>
     <section class="panel"><h2>${ic('star')}Servizi CXI suggeriti</h2>
@@ -1266,7 +1332,7 @@ function viewGuida() {
   <p>Il sito non contiene un modello di intelligenza artificiale. Prepara il testo da dare alla chat (le istruzioni dell'agent più la tua richiesta), e poi legge la risposta e la mostra in queste schermate. Così funziona gratis con Gemini, ChatGPT o Claude, e chi lo usa non deve programmare niente.</p>
   <ol>
     <li>In <a href="#/nuova">Nuova ricerca</a> descrivi il target e controlli il riepilogo dei parametri.</li>
-    <li>In Esegui copi il testo, lo incolli in una chat nuova con la ricerca web attiva e aspetti l'output.</li>
+    <li>In Esegui copi il testo, lo incolli in una chat nuova con la ricerca web attiva e aspetti l'output: l'agent non chiede conferma e restituisce tutto in una risposta.</li>
     <li>Incolli la risposta nel sito: trovi la tabella delle aziende, le schede, il confronto e le verifiche consigliate.</li>
     <li>Nella scheda di ogni azienda compili la verifica: il sito aggiorna lo stato e gli indicatori della casa della qualità.</li>
   </ol>
@@ -1277,7 +1343,8 @@ function viewGuida() {
     <tr><td>Risultati, scheda azienda, confronto, verifiche consigliate</td><td>Sì</td></tr>
     <tr><td>Verifica dell'account con esito (vincoli, dati falsi, fonti valide)</td><td>Sì</td></tr>
     <tr><td>Indicatori della casa della qualità calcolati sull'output, con cronometro</td><td>Sì, tranne EC11 ed EC22</td></tr>
-    <tr><td>Criteri di priorità diversi da quelli di default</td><td>Sì: il sito legge i criteri che l'agent mette nella Tabella 2</td></tr>
+    <tr><td>Criteri di priorità diversi da quelli di default</td><td>Sì: se li indichi, nel modulo o a parole, l'agent usa solo quelli, da 1 a 3 ciascuno; se non indichi niente usa il modello di default. Il sito legge i criteri dalla Tabella 2</td></tr>
+    <tr><td>Tabella dei risultati ordinabile per fatturato, dimensione o punteggio</td><td>Sì: con le frecce nelle intestazioni</td></tr>
     <tr><td>Feedback sui tre criteri CXI, esportazione in Excel e registro .json con testo inviato, tempi e indicatori</td><td>Sì</td></tr>
     <tr><td>Ricerca automatica senza chat (API del modello)</td><td>No: serve una chiave a pagamento</td></tr>
     <tr><td>Aziende, Opportunità, Report, Impostazioni</td><td>No: collegamento al CRM, fuori dal perimetro</td></tr>
@@ -1330,7 +1397,9 @@ const ACT = {
   example(el) { req.mode = 'libera'; req.testo = EXAMPLES[+el.dataset.i]; startClock(); saveReq(); if (location.hash === '#/nuova') rerender(); else location.hash = '#/nuova'; },
   mode(el, e) { req.mode = el.dataset.mode; saveReq(); if (el.tagName === 'A') return; e.preventDefault(); rerender(); },
   'example-run'(el, e) { e.preventDefault(); openExample(); if (location.hash === '#/risultati') rerender(); },
-  prio(el) { const v = el.dataset.v; req.prio = req.prio.includes(v) ? req.prio.filter(x => x !== v) : PRIO_ALL.filter(x => x === v || req.prio.includes(x)); saveReq(); el.setAttribute('aria-pressed', req.prio.includes(v)); el.innerHTML = ic(req.prio.includes(v) ? 'check' : 'plus') + v; refreshSide(); },
+  prio(el) { const v = el.dataset.v; req.prio = req.prio.includes(v) ? req.prio.filter(x => x !== v) : [...req.prio, v]; startClock(); saveReq(); el.setAttribute('aria-pressed', req.prio.includes(v)); el.innerHTML = ic(req.prio.includes(v) ? 'check' : 'plus') + v; refreshSide(); },
+  prioMode(el) { req.prioMode = el.dataset.v; startClock(); saveReq(); rerender(); },
+  sort(el) { const k = el.dataset.k; sortBy = k === 'prio' ? { k, dir: 1 } : sortBy.k === k ? { k, dir: -sortBy.dir } : { k, dir: -1 }; rerender(); },
   case1() { req = { ...CASE1, t0: Date.now() }; saveReq(); rerender(); toast('Compilato con il case 1 di CXI'); },
   clearReq() { req = { ...DEFAULT_REQ, mode: req.mode }; saveReq(); rerender(); },
   toEsegui() {
@@ -1346,7 +1415,7 @@ const ACT = {
     const fail = m => { err.textContent = m; err.hidden = false; };
     if (!text.trim()) return fail('Incolla prima la risposta della chat.');
     const d = parseOutput(text);
-    if (!d.companies.length) return fail(d.params.length ? 'Vedo solo il riepilogo dei parametri. Conferma i parametri in chat e incolla la risposta successiva, quella con le tabelle.' : 'Non trovo la tabella delle aziende. Copia la risposta con il pulsante Copia della chat, così le tabelle restano in formato markdown.');
+    if (!d.companies.length) return fail(d.params.length ? 'Vedo solo il riepilogo dei parametri: la chat si è fermata prima delle tabelle. Scrivile «procedi» e incolla qui la risposta successiva.' : 'Non trovo la tabella delle aziende. Copia la risposta con il pulsante Copia della chat, così le tabelle restano in formato markdown.');
     const { t0, tCopy, lastPrompt, lastIstr, ...clean } = req;
     const run = addRun(text, 'chat', $('#platform').value, clean);
     run.prompt = lastPrompt || (istr ? buildPrompt(req, istr) : '');
@@ -1356,7 +1425,7 @@ const ACT = {
     saveReq(); saveRuns();
     location.hash = '#/risultati';
   },
-  openRun(el) { curId = el.dataset.id; store.set(LS.cur, curId); compareSel = []; fbDraft = null; location.hash = '#/risultati'; },
+  openRun(el) { curId = el.dataset.id; store.set(LS.cur, curId); compareSel = []; fbDraft = null; sortBy = { k: 'prio', dir: 1 }; location.hash = '#/risultati'; },
   delRun(el) { runs = runs.filter(r => r.id !== el.dataset.id); if (curId === el.dataset.id) { curId = null; store.set(LS.cur, null); } saveRuns(); rerender(); toast('Ricerca eliminata da questo browser'); },
   sel(el) { const i = +el.dataset.i; compareSel = el.checked ? [...compareSel, i].slice(0, 3) : compareSel.filter(x => x !== i); rerender(); },
   unsel(el) { compareSel = compareSel.filter(x => x !== +el.dataset.i); rerender(); },
@@ -1364,9 +1433,9 @@ const ACT = {
   chk(el) { const run = currentRun(); run.checks = run.checks || {}; run.checks[el.dataset.i] = el.checked; saveRuns(); el.closest('li').classList.toggle('done', el.checked); },
   csv() {
     const run = currentRun(), d = run.data;
-    const head = ['Priorità', 'Azienda', 'Sede', d.metricLabel || 'Dimensione', 'Cluster', ...d.criteria.map(k => `${k.name} (su ${k.max})`), 'Totale', 'Servizio principale', 'Servizio secondario', 'Aggancio al fatto', 'Fonte', 'Stato verifica', 'Vincoli rispettati', 'Dati controllati', 'Dati falsi', 'Fonti aperte', 'Fonti valide', 'Note di verifica'];
+    const head = ['Priorità', 'Azienda', 'Sede', d.metricLabel || 'Dimensione', ...(d.showFat ? [d.fatLabel] : []), 'Cluster', ...d.criteria.map(k => `${k.name} (su ${k.max})`), 'Totale', 'Servizio principale', 'Servizio secondario', 'Aggancio al fatto', 'Fonte', 'Stato verifica', 'Vincoli rispettati', 'Dati controllati', 'Dati falsi', 'Fonti aperte', 'Fonti valide', 'Note di verifica'];
     const q = v => '"' + plain(v ?? '').replace(/"/g, '""') + '"';
-    const lines = [head.map(q).join(';')].concat(d.companies.map((c, i) => { const v = verOf(run, c.name); return [c.prio ?? i + 1, c.name, c.sede, c.metric, c.cluster, ...c.scores, c.tot, c.main, c.second, c.hook, c.fonte, VSTATE[vstate(v)][2], v.vincoli === 'si' ? 'Sì' : v.vincoli === 'no' ? 'No' : '', v.dati, v.falsi, v.fonti, v.valide, v.note].map(q).join(';'); }));
+    const lines = [head.map(q).join(';')].concat(d.companies.map((c, i) => { const v = verOf(run, c.name); return [c.prio ?? i + 1, c.name, c.sede, c.metric, ...(d.showFat ? [c.fat] : []), c.cluster, ...c.scores, c.tot, c.main, c.second, c.hook, c.fonte, VSTATE[vstate(v)][2], v.vincoli === 'si' ? 'Sì' : v.vincoli === 'no' ? 'No' : '', v.dati, v.falsi, v.fonti, v.valide, v.note].map(q).join(';'); }));
     download(`prospect_${stamp()}.csv`, '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
   },
   dlMd() { const run = currentRun(); download(`output_${stamp()}.md`, run.raw, 'text/markdown;charset=utf-8'); },
@@ -1383,7 +1452,7 @@ const ACT = {
         testo_inviato: run.prompt || null,
         tempi: { inizio: iso(t.start), testo_copiato: iso(t.copy), output: iso(t.output), ultima_verifica: iso(t.verified), minuti_fino_output: mins(t.start, t.output), minuti_fino_verifica: mins(t.start, t.verified) },
         criteri: d.criteria,
-        aziende: d.companies.map(c => ({ nome: c.name, priorita: c.prio, punteggi: c.scores, totale: c.tot, stato: VSTATE[vstate(verOf(run, c.name))][2], verifica: verOf(run, c.name) })),
+        aziende: d.companies.map(c => ({ nome: c.name, priorita: c.prio, fatturato: plain(c.fat) || null, punteggi: c.scores, totale: c.tot, stato: VSTATE[vstate(verOf(run, c.name))][2], verifica: verOf(run, c.name) })),
         esclusi: d.excluded.map(x => ({ nome: x.name, motivo: plain(x.why) })),
         verifiche_consigliate_fatte: Object.keys(run.checks || {}).filter(k => run.checks[k]).map(Number),
         misure: measures(run).map(m => ({ ec: m.code, indicatore: m.name, valore: m.val, descrizione: m.value, obiettivo: m.target, in_obiettivo: m.ok, origine: m.how === 'auto' ? 'automatico' : 'verifica dell\'account' })),
@@ -1394,7 +1463,7 @@ const ACT = {
   },
   dlScheda(el) {
     const run = currentRun(), d = run.data, c = d.companies[+el.dataset.i], max = maxScore(d);
-    const md = [`# ${c.name}`, '', `- Cluster: ${plain(c.cluster)}`, `- Sede: ${plain(c.sede)}`, `- ${d.metricLabel}: ${plain(c.metric)}`, `- Altri dati: ${plain(c.altri)}`, `- Fonte: ${plain(c.fonte)}`, '', `## Punteggio: ${c.tot}/${max}`, ...d.criteria.map((k, idx) => `- ${k.name}: ${c.scores[idx] ?? '—'}/${k.max}`), '', '## Fatti recenti', ...c.facts.map(f => '- ' + plain(f)), '', '## Servizi CXI', `- Principale: ${plain(c.main)}`, `- Secondario: ${plain(c.second)}`, `- Aggancio al fatto: ${plain(c.hook)}`, '', '## Interlocutori', ...rolesFor(d, c).map(r => `- ${r.ruolo} (${r.peso}): ${plain(r.interessa)}`), '', '## Verifica dell\'account', `- Stato: ${VSTATE[vstate(verOf(run, c.name))][2]}`, `- Vincoli rispettati: ${{ si: 'sì', no: 'no' }[verOf(run, c.name).vincoli] || 'non ancora verificato'}`, `- Dati controllati: ${verOf(run, c.name).dati ?? '—'}, di cui falsi: ${verOf(run, c.name).falsi ?? '—'}`, `- Fonti aperte: ${verOf(run, c.name).fonti ?? '—'}, valide: ${verOf(run, c.name).valide ?? '—'}`, '', run.source === 'esempio' ? '_Dati di esempio, inventati._' : `_Output da ${run.platform}, ${fmtDate(run.created)}: da verificare prima dell'uso._`].join('\n');
+    const md = [`# ${c.name}`, '', `- Cluster: ${plain(c.cluster)}`, `- Sede: ${plain(c.sede)}`, `- ${d.metricLabel}: ${plain(c.metric)}`, ...(d.showFat ? [`- ${d.fatLabel}: ${plain(c.fat)}`] : []), `- Altri dati: ${plain(c.altri)}`, `- Fonte: ${plain(c.fonte)}`, '', `## Punteggio: ${c.tot}/${max}`, ...d.criteria.map((k, idx) => `- ${k.name}: ${c.scores[idx] ?? '—'}/${k.max}`), '', '## Fatti recenti', ...c.facts.map(f => '- ' + plain(f)), '', '## Servizi CXI', `- Principale: ${plain(c.main)}`, `- Secondario: ${plain(c.second)}`, `- Aggancio al fatto: ${plain(c.hook)}`, '', '## Interlocutori', ...rolesFor(d, c).map(r => `- ${r.ruolo} (${r.peso}): ${plain(r.interessa)}`), '', '## Verifica dell\'account', `- Stato: ${VSTATE[vstate(verOf(run, c.name))][2]}`, `- Vincoli rispettati: ${{ si: 'sì', no: 'no' }[verOf(run, c.name).vincoli] || 'non ancora verificato'}`, `- Dati controllati: ${verOf(run, c.name).dati ?? '—'}, di cui falsi: ${verOf(run, c.name).falsi ?? '—'}`, `- Fonti aperte: ${verOf(run, c.name).fonti ?? '—'}, valide: ${verOf(run, c.name).valide ?? '—'}`, '', run.source === 'esempio' ? '_Dati di esempio, inventati._' : `_Output da ${run.platform}, ${fmtDate(run.created)}: da verificare prima dell'uso._`].join('\n');
     download(`scheda_${norm(c.name).replace(/ /g, '-')}.md`, md, 'text/markdown;charset=utf-8');
   },
   star(el) { fbDraft[el.dataset.k] = +el.dataset.n; $$(`[data-act="star"][data-k="${el.dataset.k}"]`).forEach(b => { b.classList.toggle('on', +b.dataset.n <= fbDraft[el.dataset.k]); b.setAttribute('aria-pressed', +b.dataset.n === fbDraft[el.dataset.k]); }); },
