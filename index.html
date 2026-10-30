@@ -185,7 +185,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);bo
 .logic svg{color:var(--blue);margin-top:2px}
 .tablebar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
 .tablebar .grow{flex:1}
-.table-wrap{overflow-x:auto}
+.table-wrap{overflow-x:auto;position:relative}
 table.res{width:100%;border-collapse:collapse;min-width:820px}
 table.res th{text-align:left;font-size:13px;font-weight:600;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--line);background:#FAFBFD;white-space:nowrap}
 table.res td{padding:12px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle}
@@ -541,7 +541,7 @@ let fbDraft = null;
 let istr = null;
 
 const saveReq = () => store.set(LS.req, req);
-const saveRuns = () => store.set(LS.runs, runs.slice(0, 15).map(({ data, ...r }) => r));
+const saveRuns = () => store.set(LS.runs, runs.slice(0, 40).map(({ data, ...r }) => r));
 
 /* ---------- lettura dell'output della chat ---------- */
 const plain = s => String(s ?? '').replace(/\*\*|__/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/<br\s*\/?>/gi, ' ').trim();
@@ -860,26 +860,37 @@ const pct = (a, b) => b ? Math.round(100 * a / b) : null;
 const filled = v => { const p = plain(v); return !!p && !/^(—|–|-|n\.?\s?d\.?|non trovat[oa]|non indicat[oa])$/i.test(p); };
 const factOk = f => filled(f) && !/non trovat/i.test(f);
 const hasSrc = f => /https?:\/\/|\]\(|\([^)]*\b(19|20)\d{2}\b[^)]*\)|livello\s*[ABC]\b|,\s*[ABC]\s*[,)]/i.test(f);
-const STOP = new Set(['della', 'delle', 'degli', 'dello', 'nella', 'nelle', 'negli', 'sulla', 'sulle', 'dalla', 'dalle', 'questo', 'questa', 'anche', 'fonte', 'livello', 'stampa', 'comunicato', 'ufficiale', 'secondaria', 'confermare', 'aggiornare', 'verificare', 'trovato', 'economica', 'locale', 'nazionale', 'settore', 'articolo', 'relazione', 'annuale']);
-const words = s => new Set(norm(s).split(' ').filter(w => w.length >= 5 && !STOP.has(w)));
-const linked = c => { const f = words(c.facts.join(' ')); return [...words(c.hook)].some(w => f.has(w)); };
-const WEAK = new Set(['clienti', 'cliente', 'nuova', 'nuovo', 'nuove', 'nuovi', 'media', 'gestire', 'gestione', 'direzione', 'direttore', 'responsabile', 'servizio', 'servizi', 'aziende', 'azienda', 'progetti', 'progetto', 'processi', 'tutti']);
-const SHORT = new Set(['app', 'chat', 'call', 'lead', 'esg', 'hr', 'crm', 'web', 'bdc', 'cup']);
-const stems = s => new Set(norm(s).split(' ').filter(w => SHORT.has(w) || (w.length >= 5 && !STOP.has(w) && !WEAK.has(w))).map(w => w.length <= 4 ? w : w.slice(0, Math.min(6, w.length - 1))));
-const overlap = (a, b) => { const B = stems(b); return [...stems(a)].some(w => B.has(w)); };
-const mainBu = c => { const m = plain(c.main).match(/^([^:]+?):/); return m ? buKey(m[1]) : ''; };
+const fmt2 = x => x.toFixed(2).replace('.', ',');
+const stem5 = s => norm(s).split(' ').filter(w => w.length >= 4).map(w => w.slice(0, 5));
+const sharesWord = (a, b) => { const B = stem5(b); return stem5(a).some(w => B.includes(w)); };
+const buLabel = k => k.replace(/\b\w/g, ch => ch.toUpperCase()).replace(/^Esg\b/, 'ESG');
+function askedCriteria(r) {
+  if (!r) return [];
+  if (r.mode === 'libera') { const h = orderHint(r.testo); return h && h !== 'generico' ? h.split(/,|;|\s+e\s+/).map(x => x.trim()).filter(Boolean) : []; }
+  return prioList(r);
+}
+const jaccard = (A, B) => { const i = A.filter(a => B.some(b => same(a, b))).length, u = A.length + B.length - i; return u ? i / u : 1; };
+function repeats(run) {
+  if (!run.prompt) return [run];
+  return runs.filter(r => r.prompt === run.prompt).map(r => { r.data = r.data || parseOutput(r.raw); return r; });
+}
 
 function measures(run) {
-  const d = run.data, cs = d.companies, n = cs.length, out = [];
+  const d = run.data, cs = d.companies, n = cs.length, out = [], ex = run.source === 'esempio';
   const cat = parseCatalog(istr);
   const asked = run.request && run.request.mode !== 'libera' && +run.request.nomi ? +run.request.nomi : num((d.params.find(([k]) => /numero/.test(norm(k))) || [])[1]);
-  const add = (code, name, value, ok, target, how, val) => out.push({ code, name, value, ok, target, how, val });
+  const add = m => out.push({ g: 'ec', sub: '', ...m });
   const vs = cs.map(c => verOf(run, c.name));
 
   const ans = vs.filter(v => v.vincoli === 'si' || v.vincoli === 'no'), si = ans.filter(v => v.vincoli === 'si').length, left = n - ans.length;
-  add('EC01', 'Attinenza ai vincoli', ans.length ? `${si} su ${ans.length} aziende verificate rispettano i vincoli (${pct(si, ans.length)}%)${left ? `; ${left} da verificare` : ''}` : 'Nessuna azienda ancora verificata', ans.length ? si === ans.length : null, '100%', 'verifica', ans.length ? pct(si, ans.length) : null);
+  const U01 = '% parametri della richiesta rispettati, vincoli e criteri';
+  add({ code: 'EC01', name: 'Aderenza ai vincoli', sub: 'vincoli', unit: U01, value: ans.length ? `${si} su ${ans.length} aziende verificate rispettano i vincoli (${pct(si, ans.length)}%)${left ? `; ${left} da verificare` : ''}` : 'Nessuna azienda ancora verificata', ok: ans.length ? si === ans.length : null, target: '100%', how: 'verifica', val: ans.length ? pct(si, ans.length) : null });
+  const want = askedCriteria(run.request), def = !want.length, expect = def ? PRIO_ALL : want;
+  const used = expect.filter(k => d.criteria.some(c => sharesWord(c.name, k)));
+  const extra = d.criteria.filter(c => !expect.some(k => sharesWord(c.name, k))).map(c => c.name);
+  add({ code: 'EC01', name: 'Aderenza ai vincoli', sub: 'criteri di priorità', unit: U01, value: d.criteria.length ? `${used.length} su ${expect.length} criteri ${def ? 'del modello di default' : 'richiesti'} usati nella classifica${used.length < expect.length ? '; manca: ' + expect.filter(k => !used.includes(k)).join(', ') : ''}${extra.length ? '; in più: ' + extra.join(', ') : ''}` : 'Nell\'output non ci sono punteggi per criterio', ok: n ? used.length === expect.length && !extra.length : null, target: '100%', how: 'auto', val: pct(used.length, expect.length) });
 
-  add('EC03', 'Numero aziende proposte', asked ? `${n} su ${asked} richieste` : `${n}`, asked ? n >= asked : null, asked ? `almeno ${asked}` : 'quante richieste', 'auto', n);
+  add({ code: 'EC02', name: 'Dimensione set risultati', unit: 'sì/no: almeno i nomi richiesti', value: asked ? `${n >= asked ? 'Sì' : 'No'}: ${n} nomi su ${asked} richiesti` : `${n} nomi; il numero richiesto non è indicato`, ok: asked ? n >= asked : null, target: 'sì', how: 'auto', val: asked ? (n >= asked ? 1 : 0) : null });
 
   let tot = 0, ok = 0; const cell = v => { tot++; if (filled(v)) ok++; };
   cs.forEach(c => {
@@ -891,55 +902,72 @@ function measures(run) {
   d.roles.forEach(r => [r.ruolo, r.peso, r.interessa, r.messaggio].forEach(cell));
   for (let k = d.roles.length; k < 3; k++) [1, 2, 3, 4].forEach(() => cell(''));
   cell(d.logic); cell(d.checks.join(' '));
-  add('EC05', 'Completezza dei campi', `${pct(ok, tot)}% (${ok} su ${tot} campi compilati)`, ok === tot, '100%', 'auto', pct(ok, tot));
+  add({ code: 'EC03', name: 'Campi processati', unit: '% campi obbligatori compilati', value: `${pct(ok, tot)}% (${ok} su ${tot} campi compilati)`, ok: ok === tot, target: '100%', how: 'auto', val: pct(ok, tot) });
 
-  const dati = vs.reduce((s, v) => s + (+v.dati || 0), 0), falsi = vs.reduce((s, v) => s + Math.min(+v.falsi || 0, +v.dati || 0), 0);
-  add('EC06', 'Dati inventati', dati ? `Falsi o inesistenti: ${falsi} su ${dati} dati controllati (${pct(falsi, dati)}%)` : 'Nessun dato ancora controllato', dati ? falsi === 0 : null, '0%', 'verifica', dati ? pct(falsi, dati) : null);
-
+  const U05 = '% dati con fonte valida';
+  const ap = vs.reduce((s, v) => s + (+v.fonti || 0), 0), va = vs.reduce((s, v) => s + Math.min(+v.valide || 0, +v.fonti || 0), 0);
+  add({ code: 'EC05', name: 'Affidabilità delle fonti', sub: 'fonte valida', unit: U05, value: ap ? `${va} su ${ap} fonti aperte confermano il dato (${pct(va, ap)}%)` : 'Nessuna fonte ancora aperta', ok: ap ? va === ap : null, target: '100%', how: 'verifica', val: ap ? pct(va, ap) : null });
   const lv = { A: 0, B: 0, C: 0, '': 0 }; let units = 0, src = 0;
   cs.forEach(c => { units++; if (filled(c.fonte)) src++; lv[level(c.fonte)]++; c.facts.filter(factOk).forEach(f => { units++; if (hasSrc(f)) src++; lv[level(f)]++; }); });
-  add('EC07', 'Fonte indicata', units ? `${pct(src, units)}% dei dati (${src} su ${units}). Livello A ${lv.A}, B ${lv.B}, C ${lv.C}, non indicato ${lv['']}` : 'Nessun dato', units ? src === units : null, '100%', 'auto', pct(src, units));
-  const ap = vs.reduce((s, v) => s + (+v.fonti || 0), 0), va = vs.reduce((s, v) => s + Math.min(+v.valide || 0, +v.fonti || 0), 0);
-  add('EC07', 'Fonte valida', ap ? `${va} su ${ap} fonti aperte confermano il dato (${pct(va, ap)}%)` : 'Nessuna fonte ancora aperta', ap ? va === ap : null, '100%', 'verifica', ap ? pct(va, ap) : null);
+  add({ code: 'EC05', name: 'Affidabilità delle fonti', sub: 'fonte indicata', unit: U05, value: units ? `${pct(src, units)}% dei dati con la fonte (${src} su ${units}). Livello A ${lv.A}, B ${lv.B}, C ${lv.C}, non indicato ${lv['']}` : 'Nessun dato', ok: units ? src === units : null, target: '100%', how: 'auto', val: pct(src, units) });
 
-  const complete = cs.filter(c => d.criteria.length && c.scores.length === d.criteria.length && c.scores.every(v => v != null) && c.tot === c.scores.reduce((s, v) => s + v, 0)).length;
+  const rep = ex ? [] : repeats(run);
+  let jm = null;
+  if (rep.length > 1) { const js = []; rep.forEach((a, i) => rep.slice(i + 1).forEach(b => js.push(jaccard(a.data.companies.map(c => c.name), b.data.companies.map(c => c.name))))); jm = js.reduce((s, x) => s + x, 0) / js.length; }
+  add({ code: 'EC06', name: 'Ripetibilità risposte', unit: 'indice 0–1, sovrapposizione media delle liste', value: ex ? 'Non applicabile all\'esempio' : jm == null ? 'Serve almeno un\'altra esecuzione con lo stesso testo inviato alla chat (stessa richiesta, stesse istruzioni)' : `${fmt2(jm)}: media su ${rep.length} esecuzioni dello stesso testo`, ok: null, target: 'da fissare', how: 'multi', val: jm == null ? null : +jm.toFixed(2) });
+
+  const m = d.criteria.length;
+  const covered = d.criteria.filter((k, idx) => cs.every(c => c.scores[idx] != null && c.scores[idx] >= 1 && c.scores[idx] <= 3)).length;
+  const complete = cs.filter(c => m && c.scores.length === m && c.scores.every(v => v != null) && c.tot === c.scores.reduce((s, v) => s + v, 0)).length;
   let inv = 0; for (let i = 0; i + 1 < n; i++) if ((cs[i].tot ?? 0) < (cs[i + 1].tot ?? 0)) inv++;
-  add('EC14', 'Motivazione della priorità', `${complete} su ${n} con tutti i punteggi e il totale giusto; ${inv ? `${inv} inversioni nell'ordine` : 'ordine coerente con i totali'}${d.logic ? '' : '; manca la frase con la logica'}`, n ? complete === n && !inv && !!d.logic : null, '100%, ordine coerente', 'auto', pct(complete, n));
+  add({ code: 'EC07', name: 'Logica di priorità esplicita', unit: '% criteri con punteggio da 1 a 3', value: m ? `${pct(covered, m)}% (${covered} su ${m} criteri da 1 a 3); ${complete} su ${n} aziende con il totale giusto; ${inv ? `${inv} inversioni nell'ordine` : 'ordine coerente con i totali'}${d.logic ? '' : '; manca la frase con la logica'}` : 'Nell\'output non ci sono punteggi per criterio', ok: n ? !!m && covered === m && complete === n && !inv && !!d.logic : null, target: '100%, ordine coerente', how: 'auto', val: m ? pct(covered, m) : null });
 
   const svc = cs.flatMap(c => [c.main, c.second].filter(filled).map(s => ({ c: c.name, s })));
-  if (cat) {
-    const bad = svc.filter(x => !inCatalog(cat, x.s));
-    add('EC15', 'Attinenza con servizi offerti', `${pct(svc.length - bad.length, svc.length) ?? 0}% (${svc.length - bad.length} su ${svc.length} servizi nel catalogo)${bad.length ? '. Fuori catalogo: ' + bad.map(x => `${x.c}, «${plain(x.s)}»`).join('; ') : ''}`, svc.length ? !bad.length : null, '100%', 'auto', pct(svc.length - bad.length, svc.length));
-  } else add('EC15', 'Attinenza con servizi offerti', 'Catalogo non disponibile: il sito non riesce a leggere istruzioni.txt', null, '100%', 'auto', null);
+  const bad = cat ? svc.filter(x => !inCatalog(cat, x.s)) : [];
+  add({ code: 'EC08', name: 'Conoscenza catalogo CXI', unit: '% servizi proposti presenti nel catalogo CXI', value: cat ? `${pct(svc.length - bad.length, svc.length) ?? 0}% (${svc.length - bad.length} su ${svc.length} servizi nel catalogo)${bad.length ? '. Fuori catalogo: ' + bad.map(x => `${x.c}, «${plain(x.s)}»`).join('; ') : ''}` : 'Catalogo non disponibile: il sito non riesce a leggere istruzioni.txt', ok: cat && svc.length ? !bad.length : null, target: '100%', how: 'auto', val: cat ? pct(svc.length - bad.length, svc.length) : null });
 
-  const trig = parseBlock(istr, /quando proporre/i), who = parseBlock(istr, /interlocutore tipico/i);
-  const hasHook = c => filled(c.hook), isLinked = c => filled(c.hook) && linked(c);
-  const fits = c => !trig || (!!trig[mainBu(c)] && overlap(trig[mainBu(c)], c.facts.join(' ') + ' ' + c.hook));
-  const hasRole = c => !who || (!!who[mainBu(c)] && overlap(who[mainBu(c)], rolesFor(d, c).map(r => r.ruolo).join(' ')));
-  const hk = cs.filter(hasHook).length, lk = cs.filter(isLinked).length, fk = cs.filter(fits).length, rk = cs.filter(hasRole).length;
-  const good = cs.filter(c => hasHook(c) && isLinked(c) && fits(c) && hasRole(c)).length;
-  const noRole = who ? cs.filter(c => !hasRole(c)).map(c => c.name) : [];
-  add('EC16', 'Match tra servizi e bisogni del buyer', `${hk} su ${n} con l'aggancio al fatto; ${lk} legati a un fatto della Tabella 3${trig ? `; ${fk} con un servizio principale adatto al tipo di fatto` : ''}${who ? `; ${rk} con un interlocutore interessato al servizio principale` : ''}${noRole.length ? `. Manca l'interlocutore adatto per: ${noRole.join(', ')}` : ''}`, n ? good === n : null, '100%', 'auto', pct(good, n));
+  const trig = parseBlock(istr, /quando proporre/i);
+  const per = trig ? Object.entries(trig).map(([k, v]) => [buLabel(k), v.replace(/\.\s*$/, '').split(/;\s*/).filter(x => x.trim()).length]) : [];
+  const nt = per.reduce((s, [, x]) => s + x, 0), iv = istrVersion(istr);
+  add({ code: 'EC09', name: 'Regole di abbinamento fatto → business unit', unit: 'n. tipi di fatto collegati a una business unit', value: trig ? `${nt} nelle istruzioni ${iv} (${per.map(([k, x]) => `${k} ${x}`).join(', ')})${run.istr && run.istr !== iv ? `; questa ricerca ha usato le istruzioni ${run.istr}` : ''}` : 'Istruzioni non disponibili: il sito non riesce a leggere istruzioni.txt', ok: null, target: 'da fissare', how: 'istr', val: trig ? nt : null });
 
   const fullRoles = d.roles.filter(r => [r.ruolo, r.peso, r.interessa, r.messaggio].every(filled)).length;
-  add('EC17', 'Riconosce ruoli essenziali', `${fullRoles} ruoli completi di peso, interessi e primo messaggio`, fullRoles >= 3, 'almeno 3', 'auto', fullRoles);
+  add({ code: 'EC10', name: 'Copertura ruoli con attributi decisionali', unit: 'n. ruoli con peso, interessi e primo messaggio', value: `${fullRoles} ruoli completi di peso, interessi e primo messaggio`, ok: fullRoles >= 3, target: 'almeno 3', how: 'auto', val: fullRoles });
 
+  add({ code: 'EC11', name: 'Tempo di elaborazione e risposta', unit: 'token elaborati al secondo', value: 'Non si misura qui: dipende dalla chat e dal modello. Il tempo per query è fra gli indicatori di validazione', ok: null, target: 'da fissare', how: 'no', val: null });
+
+  const verDone = vs.some(v => v.vincoli === 'si' || v.vincoli === 'no' || +v.dati > 0 || +v.fonti > 0);
+  const arch = [['richiesta', run.request], ['testo inviato alla chat', run.prompt], ['versione delle istruzioni', run.istr], ['chat usata', run.platform], ['output', run.raw], ['tempi', run.t && run.t.output], ['esito delle verifiche', verDone]];
+  const miss = arch.filter(p => !p[1]).map(p => p[0]), have = arch.length - miss.length;
+  add({ code: 'EC12', name: 'Completezza archivio', unit: 'n. elementi salvati in automatico per esecuzione', value: ex ? 'Non applicabile all\'esempio' : `${have} su ${arch.length} elementi salvati${miss.length ? '; manca: ' + miss.join(', ') : ''}`, ok: ex ? null : !miss.length, target: `${arch.length} su ${arch.length}`, how: 'auto', val: ex ? null : have });
+
+  add({ code: 'EC13', name: 'Data Leakage', unit: 'n. informazioni riservate CXI inviate a strumenti non approvati', value: 'Non si misura qui: richiede la revisione del testo inviato e dei file caricati', ok: null, target: '0', how: 'no', val: null });
+
+  const dati = vs.reduce((s, v) => s + (+v.dati || 0), 0), falsi = vs.reduce((s, v) => s + Math.min(+v.falsi || 0, +v.dati || 0), 0);
+  add({ g: 'val', code: '', name: 'Dati veritieri', unit: '% dati controllati risultati veritieri', value: dati ? `${dati - falsi} su ${dati} dati controllati (${pct(dati - falsi, dati)}%); falsi o inesistenti: ${falsi}` : 'Nessun dato ancora controllato', ok: dati ? falsi === 0 : null, target: '100%', how: 'verifica', val: dati ? pct(dati - falsi, dati) : null });
+  const hk = cs.filter(c => filled(c.hook)).length;
+  add({ g: 'val', code: '', name: 'Aggancio al fatto', unit: '% aziende con un fatto concreto a sostegno della proposta', value: `${hk} su ${n} aziende con l'aggancio al fatto (${pct(hk, n) ?? 0}%)`, ok: n ? hk === n : null, target: '100%', how: 'auto', val: pct(hk, n) });
   const t = run.t || {}, m1 = mins(t.start, t.output), m2 = mins(t.start, t.verified);
-  add('EC18', 'Tempo per query', run.source === 'esempio' ? 'Non misurato: è l\'esempio' : !t.start ? 'Non misurato: la richiesta non è partita da questo sito' : `${fmtMin(m1)} dalla richiesta all'output; ${t.verified ? `${fmtMin(m2)} fino all'ultima verifica` : 'verifica in corso'}`, null, 'da fissare', 'auto', m2);
-
-  const miss = [['richiesta', run.request], ['testo inviato alla chat', run.prompt], ['output', run.raw], ['versione delle istruzioni', run.istr]].filter(p => !p[1]).map(p => p[0]);
-  const ex = run.source === 'esempio';
-  add('EC21', 'Tracciabilità', ex ? 'Non applicabile all\'esempio' : miss.length ? `Manca: ${miss.join(', ')}` : 'Registro completo: richiesta, testo inviato, output, versione delle istruzioni', ex ? null : !miss.length, 'registro completo', 'auto', ex ? null : miss.length ? 0 : 100);
+  add({ g: 'val', code: '', name: 'Tempo per query', unit: 'minuti dalla richiesta all\'output verificato', value: ex ? 'Non misurato: è l\'esempio' : !t.start ? 'Non misurato: la richiesta non è partita da questo sito' : `${fmtMin(m1)} dalla richiesta all'output; ${t.verified ? `${fmtMin(m2)} fino all'ultima verifica` : 'verifica in corso'}`, ok: null, target: 'da fissare', how: 'auto', val: m2 });
   return out;
 }
 let istrTried = false;
+const HOW = { auto: 'Automatico', verifica: 'Dalla tua verifica', istr: 'Dalle istruzioni', multi: 'Su più esecuzioni', no: '—' };
 function measuresHTML(run) {
   if (!istr && !istrTried) { istrTried = true; loadIstr().then(() => rerender()).catch(() => {}); }
   const st = ok => ok === true ? `<span class="pill ok">${ic('checkc')}In obiettivo</span>` : ok === false ? `<span class="pill ko">${ic('alert')}Fuori obiettivo</span>` : '<span class="pill neutral">—</span>';
+  const ms = measures(run);
+  const name = m => `${esc(m.name)}${m.sub ? ` <span class="muted">(${esc(m.sub)})</span>` : ''}<br><span class="muted small">${esc(m.unit)}</span>`;
+  const row = m => `<tr>${m.g === 'ec' ? `<td><b>${m.code}</b></td>` : ''}<td>${name(m)}</td><td>${esc(m.value)}</td><td>${esc(m.target)}</td><td class="muted">${HOW[m.how]}</td><td>${st(m.ok)}</td></tr>`;
   return `<section class="panel" style="margin-top:20px"><h2>${ic('chart')}Indicatori della casa della qualità</h2>
-    <p class="muted small" style="margin:-4px 0 12px">Calcolati sull'output e sulle tue verifiche. I controlli automatici guardano la presenza, non la qualità: un aggancio presente non è per forza pertinente. Gli obiettivi sono provvisori. EC11 (ripetibilità) ed EC22 (dati riservati) non si misurano qui.</p>
-    <div class="table-wrap"><table class="mini ec"><thead><tr><th>EC</th><th>Indicatore</th><th>Valore</th><th>Obiettivo</th><th>Dato</th><th>Stato</th></tr></thead><tbody>
-    ${measures(run).map(m => `<tr><td><b>${m.code}</b></td><td>${esc(m.name)}</td><td>${esc(m.value)}</td><td>${esc(m.target)}</td><td class="muted">${m.how === 'auto' ? 'Automatico' : 'Dalla tua verifica'}</td><td>${st(m.ok)}</td></tr>`).join('')}
+    <p class="muted small" style="margin:-4px 0 12px">Caratteristiche tecniche della casa della qualità (v2-3), calcolate sull'output, sulle tue verifiche e sulle istruzioni. I controlli automatici guardano la presenza, non la qualità. Nella casa i valori obiettivo non sono ancora fissati: quelli qui sono provvisori. EC04 è stata tolta dalla casa: la fedeltà ai dati è fra gli indicatori di validazione.</p>
+    <div class="table-wrap"><table class="mini ec"><thead><tr><th>EC</th><th>Caratteristica tecnica</th><th>Valore</th><th>Obiettivo</th><th>Dato</th><th>Stato</th></tr></thead><tbody>
+    ${ms.filter(m => m.g === 'ec').map(row).join('')}
+    </tbody></table></div>
+    <h3 style="margin:22px 0 4px">Indicatori di validazione</h3>
+    <p class="muted small" style="margin:0 0 12px">Misure di prestazione dell'agent, fuori dalla casa: servono per i test e per il confronto con il processo attuale.</p>
+    <div class="table-wrap"><table class="mini ec"><thead><tr><th>Indicatore</th><th>Valore</th><th>Obiettivo</th><th>Dato</th><th>Stato</th></tr></thead><tbody>
+    ${ms.filter(m => m.g === 'val').map(row).join('')}
     </tbody></table></div></section>`;
 }
 const verStateHTML = v => `<span class="lbl">Stato:</span>${vpill(v)}${(+v.falsi || 0) > (+v.dati || 0) || (+v.valide || 0) > (+v.fonti || 0) ? '<span class="err small" style="padding:4px 10px">I falsi o le fonti valide superano i controllati: correggi i numeri</span>' : ''}`;
@@ -948,7 +976,7 @@ function verHTML(run, i, c) {
   const r = (val, label) => `<label class="radio"><input type="radio" name="vin" value="${val}" data-ver="vincoli" data-i="${i}" ${(v.vincoli || '') === val ? 'checked' : ''}>${label}</label>`;
   const nf = (k, label) => `<div class="field"><label for="v-${k}">${label}</label><input type="number" min="0" inputmode="numeric" id="v-${k}" data-ver="${k}" data-i="${i}" value="${esc(v[k] ?? '')}"></div>`;
   return `<section class="panel" id="verifica" style="margin-top:20px"><h2>${ic('checkc')}Verifica dell'account (controllo 2)</h2>
-    <p class="muted small" style="margin:-4px 0 14px">Compilala dopo aver controllato i dati di questa azienda sulle fonti, e conta solo quello che hai controllato davvero. Le risposte calcolano EC01, EC06 ed EC07 nei risultati.</p>
+    <p class="muted small" style="margin:-4px 0 14px">Compilala dopo aver controllato i dati di questa azienda sulle fonti, e conta solo quello che hai controllato davvero. Le risposte calcolano EC01 (vincoli), EC05 (fonti valide) e i dati veritieri nei risultati.</p>
     <fieldset class="vin"><legend class="lbl">Rispetta tutti i vincoli della richiesta (sede, settore, dimensione)?</legend><div class="row">${r('si', 'Sì')}${r('no', 'No')}${r('', 'Non ancora')}</div></fieldset>
     <div class="vgrid">${nf('dati', 'Dati controllati')}${nf('falsi', 'Di cui falsi o inesistenti')}${nf('fonti', 'Fonti aperte')}${nf('valide', 'Di cui confermano il dato')}</div>
     <div class="field" style="margin-top:12px"><label for="v-note">Note</label><input type="text" id="v-note" data-ver="note" data-i="${i}" value="${esc(v.note || '')}" placeholder="es. nel bilancio 2025 i clienti sono 820.000"></div>
@@ -1015,7 +1043,7 @@ function viewHome() {
   </section>
   <section class="entry">
     <a class="entry-card" href="#/nuova" data-act="mode" data-mode="guidata"><span class="ico or">${ic('form')}</span><span><h3>Ricerca guidata</h3><p>Compila settore, area, dimensione e criteri. Il riepilogo dei parametri si aggiorna mentre scrivi.</p></span></a>
-    <a class="entry-card" href="#/risultati" data-act="example-run"><span class="ico">${ic('list')}</span><span><h3>Guarda un esempio</h3><p>Un risultato completo con aziende inventate: tabella, schede, confronto e feedback.</p></span></a>
+    <a class="entry-card" href="#/risultati" data-act="example-run"><span class="ico">${ic('list')}</span><span><h3>Guarda un esempio</h3><p>Un risultato completo con aziende inventate: classifica, schede, confronto e feedback.</p></span></a>
   </section>
   <section class="recent"><h2>Ultime ricerche</h2>
     ${runs.length ? `<div class="run-list">${runs.slice(0, 3).map(runItem).join('')}</div>` : `<div class="empty">Non hai ancora fatto ricerche. Parti dalla barra qui sopra o dalla ricerca guidata.</div>`}
@@ -1122,15 +1150,15 @@ function viewEsegui() {
       <h2>${ic('chat')}Con la tua chat</h2>
       <p class="muted" style="margin:-4px 0 18px">Usa Gemini, ChatGPT o Claude con la ricerca web attiva. È gratuito e non serve programmare.</p>
       <ol class="steps">
-        <li><h3>Copia il testo per la chat</h3><p>Contiene le istruzioni dell'agent (istruzioni.txt) e la tua richiesta.${req.t0 ? ` Il cronometro della ricerca (EC18) è partito alle ${new Date(req.t0).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e si ferma quando hai verificato tutte le aziende.` : ''}</p>
+        <li><h3>Copia il testo per la chat</h3><p>Contiene le istruzioni dell'agent (istruzioni.txt) e la tua richiesta.${req.t0 ? ` Il cronometro della ricerca è partito alle ${new Date(req.t0).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e si ferma quando hai verificato tutte le aziende.` : ''}</p>
           <div class="row"><button class="btn primary" data-act="copyPrompt"${ready ? '' : ' disabled'}>${ic('copy')}Copia il testo</button><button class="btn" data-act="showPrompt"${ready ? '' : ' disabled'}>Mostra il testo</button><button class="btn ghost" data-act="dlPrompt"${ready ? '' : ' disabled'}>${ic('download')}Scarica .txt</button></div>
           <pre class="prompt" id="promptBox" hidden></pre></li>
-        <li><h3>Incollalo in una chat nuova</h3><p>La chat riepiloga i parametri e prosegue senza chiederti conferma: aspetta l'output completo, con tutte le tabelle. Se la chat ha un interruttore per la ricerca web, attivalo. Su Gemini non usare Deep Research: prima di partire mostra un piano e chiede di avviarlo.</p>
+        <li><h3>Incollalo in una chat nuova</h3><p>La chat riepiloga i parametri e prosegue senza chiederti conferma: aspetta l'output completo. Se la chat ha un interruttore per la ricerca web, attivalo. Su Gemini non usare Deep Research: prima di partire mostra un piano e chiede di avviarlo.</p>
           <div class="row"><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini${ic('external')}</a><a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT${ic('external')}</a><a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">Claude${ic('external')}</a></div></li>
-        <li><h3>Incolla qui la risposta</h3><p>Copiala con il pulsante Copia della chat: così le tabelle restano leggibili.</p>
+        <li><h3>Incolla qui la risposta</h3><p>Copiala con il pulsante Copia della chat: così la formattazione resta leggibile.</p>
           <div class="field" style="max-width:260px;margin-bottom:10px"><label for="platform">Chat usata</label><select id="platform">${['Gemini', 'ChatGPT', 'Claude', 'Altra chat'].map(x => `<option>${x}</option>`).join('')}</select></div>
           <label class="sr" for="answer">Risposta della chat</label>
-          <textarea id="answer" rows="8" placeholder="Incolla qui la risposta completa della chat, dalla tabella dei parametri alle verifiche consigliate."></textarea>
+          <textarea id="answer" rows="8" placeholder="Incolla qui la risposta completa della chat, dal riepilogo dei parametri alle verifiche consigliate."></textarea>
           <div class="row" style="margin-top:10px"><button class="btn blue" data-act="readAnswer">Mostra i risultati</button></div>
           <p class="err" id="answerErr" role="alert" hidden></p></li>
       </ol>
@@ -1188,7 +1216,7 @@ function viewRisultati() {
   ${d.companies.length ? `<section class="panel" style="padding:0">
     <div class="tablebar"><span class="grow muted small">${sortNote}</span><button class="btn sm blue" data-act="goCompare" ${sel.length < 2 ? 'disabled' : ''}>${ic('compare')}Confronta (${sel.length})</button></div>
     <div class="table-wrap"><table class="res"><thead><tr><th><span class="sr">Seleziona</span></th>${sth('prio', '#')}<th>Azienda</th><th>Cluster</th>${metricNum ? sth('metric', esc(d.metricLabel || 'Dimensione')) : `<th>${esc(d.metricLabel || 'Dimensione')}</th>`}${d.showFat ? sth('fat', esc(d.fatLabel)) : ''}${sth('tot', 'Punteggio')}<th>Stato verifica</th><th><span class="sr">Azioni</span></th></tr></thead><tbody>${rows}</tbody></table></div>
-  </section>` : `<div class="strip red">${ic('alert')}<span>Nell'output non ho trovato la tabella delle aziende.</span></div>`}
+  </section>` : `<div class="strip red">${ic('alert')}<span>Nell'output non ho trovato l'elenco delle aziende.</span></div>`}
   <div class="res-grid">
     <section class="panel"><h2>${ic('checkc')}Verifiche consigliate</h2>
       ${d.checks.length ? `<ul class="vlist">${d.checks.map((x, i) => `<li class="${vdone[i] ? 'done' : ''}"><label><input type="checkbox" data-act="chk" data-i="${i}" ${vdone[i] ? 'checked' : ''}><span>${inline(x)}</span></label></li>`).join('')}</ul>` : '<p class="muted">L\'output non contiene verifiche consigliate.</p>'}
@@ -1198,7 +1226,7 @@ function viewRisultati() {
     </section>
   </div>
   ${measuresHTML(run)}
-  <details class="more"><summary>Parametri usati dall'agent</summary><div>${d.params.length ? `<table class="mini"><tbody>${d.params.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${inline(v)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">L\'output non contiene la tabella dei parametri.</p>'}</div></details>
+  <details class="more"><summary>Parametri usati dall'agent</summary><div>${d.params.length ? `<table class="mini"><tbody>${d.params.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${inline(v)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">L\'output non contiene il riepilogo dei parametri.</p>'}</div></details>
   <details class="more"><summary>Testo originale dell'output</summary><div><pre class="raw">${esc(run.raw)}</pre><div class="row" style="margin-top:10px"><button class="btn sm" data-act="dlMd">${ic('download')}Scarica l'output (.md)</button></div></div></details>`;
 }
 
@@ -1333,7 +1361,7 @@ function viewGuida() {
   <ol>
     <li>In <a href="#/nuova">Nuova ricerca</a> descrivi il target e controlli il riepilogo dei parametri.</li>
     <li>In Esegui copi il testo, lo incolli in una chat nuova con la ricerca web attiva e aspetti l'output: l'agent non chiede conferma e restituisce tutto in una risposta.</li>
-    <li>Incolli la risposta nel sito: trovi la tabella delle aziende, le schede, il confronto e le verifiche consigliate.</li>
+    <li>Incolli la risposta nel sito: trovi l'elenco delle aziende, le schede, il confronto e le verifiche consigliate.</li>
     <li>Nella scheda di ogni azienda compili la verifica: il sito aggiorna lo stato e gli indicatori della casa della qualità.</li>
   </ol>
   <h2>Cosa c'è e cosa no</h2>
@@ -1342,8 +1370,8 @@ function viewGuida() {
     <tr><td>Esecuzione con la propria chat, lettura dell'output</td><td>Sì</td></tr>
     <tr><td>Risultati, scheda azienda, confronto, verifiche consigliate</td><td>Sì</td></tr>
     <tr><td>Verifica dell'account con esito (vincoli, dati falsi, fonti valide)</td><td>Sì</td></tr>
-    <tr><td>Indicatori della casa della qualità calcolati sull'output, con cronometro</td><td>Sì, tranne EC11 ed EC22</td></tr>
-    <tr><td>Criteri di priorità diversi da quelli di default</td><td>Sì: se li indichi, nel modulo o a parole, l'agent usa solo quelli, da 1 a 3 ciascuno; se non indichi niente usa il modello di default. Il sito legge i criteri dalla Tabella 2</td></tr>
+    <tr><td>Indicatori della casa della qualità calcolati sull'output, con cronometro</td><td>Sì, tranne EC11 (token al secondo) ed EC13 (dati riservati)</td></tr>
+    <tr><td>Criteri di priorità diversi da quelli di default</td><td>Sì: se li indichi, nel modulo o a parole, l'agent usa solo quelli, da 1 a 3 ciascuno; se non indichi niente usa il modello di default. Il sito legge i criteri dalla classifica dell'output</td></tr>
     <tr><td>Tabella dei risultati ordinabile per fatturato, dimensione o punteggio</td><td>Sì: con le frecce nelle intestazioni</td></tr>
     <tr><td>Feedback sui tre criteri CXI, esportazione in Excel e registro .json con testo inviato, tempi e indicatori</td><td>Sì</td></tr>
     <tr><td>Ricerca automatica senza chat (API del modello)</td><td>No: serve una chiave a pagamento</td></tr>
@@ -1415,7 +1443,7 @@ const ACT = {
     const fail = m => { err.textContent = m; err.hidden = false; };
     if (!text.trim()) return fail('Incolla prima la risposta della chat.');
     const d = parseOutput(text);
-    if (!d.companies.length) return fail(d.params.length ? 'Vedo solo il riepilogo dei parametri: la chat si è fermata prima delle tabelle. Scrivile «procedi» e incolla qui la risposta successiva.' : 'Non trovo la tabella delle aziende. Copia la risposta con il pulsante Copia della chat, così le tabelle restano in formato markdown.');
+    if (!d.companies.length) return fail(d.params.length ? 'Vedo solo il riepilogo dei parametri: la chat si è fermata prima dei risultati. Scrivile «procedi» e incolla qui la risposta successiva.' : 'Non trovo l\'elenco delle aziende. Copia la risposta con il pulsante Copia della chat, così la formattazione resta leggibile.');
     const { t0, tCopy, lastPrompt, lastIstr, ...clean } = req;
     const run = addRun(text, 'chat', $('#platform').value, clean);
     run.prompt = lastPrompt || (istr ? buildPrompt(req, istr) : '');
@@ -1455,7 +1483,7 @@ const ACT = {
         aziende: d.companies.map(c => ({ nome: c.name, priorita: c.prio, fatturato: plain(c.fat) || null, punteggi: c.scores, totale: c.tot, stato: VSTATE[vstate(verOf(run, c.name))][2], verifica: verOf(run, c.name) })),
         esclusi: d.excluded.map(x => ({ nome: x.name, motivo: plain(x.why) })),
         verifiche_consigliate_fatte: Object.keys(run.checks || {}).filter(k => run.checks[k]).map(Number),
-        misure: measures(run).map(m => ({ ec: m.code, indicatore: m.name, valore: m.val, descrizione: m.value, obiettivo: m.target, in_obiettivo: m.ok, origine: m.how === 'auto' ? 'automatico' : 'verifica dell\'account' })),
+        misure: measures(run).map(m => ({ gruppo: m.g === 'ec' ? 'casa della qualità' : 'validazione', ec: m.code || null, indicatore: m.name + (m.sub ? ` (${m.sub})` : ''), unita: m.unit, valore: m.val, descrizione: m.value, obiettivo: m.target, in_obiettivo: m.ok, origine: { auto: 'automatico', verifica: 'verifica dell\'account', istr: 'istruzioni', multi: 'più esecuzioni', no: 'non misurato' }[m.how] })),
         output: run.raw
       };
       download(`registro_${stamp()}.json`, JSON.stringify(log, null, 2), 'application/json');
