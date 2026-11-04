@@ -187,8 +187,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);bo
 .tablebar .grow{flex:1}
 .table-wrap{overflow-x:auto;position:relative}
 table.res{width:100%;border-collapse:collapse;min-width:820px}
-table.res th{text-align:left;font-size:13px;font-weight:600;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--line);background:#FAFBFD;white-space:nowrap}
-table.res td{padding:12px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+table.res th{text-align:left;font-size:13px;font-weight:600;color:var(--muted);padding:10px 9px;border-bottom:1px solid var(--line);background:#FAFBFD;white-space:nowrap}
+table.res td{padding:12px 9px;border-bottom:1px solid var(--line-2);vertical-align:middle}
 table.res tr:last-child td{border-bottom:0}
 table.res tbody tr:hover{background:#FAFCFF}
 table.res th .sort{display:inline-flex;align-items:center;gap:4px;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;white-space:nowrap}
@@ -277,6 +277,7 @@ dl.kv dd{margin:0;font-weight:500}
 .svc b{font-weight:650}
 .hook{font-size:14px;margin-top:6px}
 .hook b{display:block;margin-bottom:2px}
+.hookline{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:-4px 0 12px}
 .det-nav{display:flex;justify-content:space-between;gap:10px;margin-top:20px;flex-wrap:wrap}
 
 /* confronto */
@@ -494,7 +495,7 @@ Nessun criterio indicato dall'account: priorità con il modello di default CXI, 
 | Brennergy | Lancio dell'app clienti e del canale chat (sito ufficiale, 2025, A)<br>Ingresso nel mercato veneto con 60.000 nuovi clienti (stampa economica nazionale, 2026, B) |
 | Lagoverde | Nuovo direttore generale nominato nel 2026 (comunicato stampa, 2026, A)<br>Progetto di formazione per gli operatori di sportello (stampa locale, 2025, B, da confermare) |
 | Orovia | Piano industriale 2026–2030 con investimenti sui canali digitali (relazione finanziaria, 2026, A)<br>Esternalizzazione parziale del contact center (articolo di settore, 2025, fonte secondaria) |
-| Pianura | Crescita dei clienti digitali del 18% (comunicato stampa, 2024, A, da aggiornare)<br>Fatti degli ultimi 24 mesi: non trovato |
+| Pianura | Fatti degli ultimi 24 mesi: non trovato |
 
 **Tabella 4 – Interlocutori e buyer persona**
 
@@ -509,11 +510,11 @@ Nessun criterio indicato dall'account: priorità con il modello di default CXI, 
 
 | Azienda | Servizio principale | Servizio secondario | Aggancio al fatto |
 | --- | --- | --- | --- |
-| Valtellux | Consulting X: analisi e armonizzazione dei processi di customer care | Operations X: gestione dei contatti e dei volumi, anche nei picchi | Acquisizione di due operatori locali: processi di contatto da unificare |
-| Brennergy | Digital X: customer journey sui canali digitali | Operations X: gestione dei contatti e dei volumi, anche nei picchi | App e chat appena lanciate, più 60.000 nuovi clienti in Veneto |
-| Lagoverde | Consulting X: formazione dei team commerciali, di front-office e dei team leader | Consulting X: standard di servizio e di accoglienza | Progetto di formazione per gli operatori di sportello (da confermare) |
-| Orovia | Operations X: gestione dei contatti e dei volumi, anche nei picchi | Consulting X: misurazione dell'esperienza del cliente o del paziente | Esternalizzazione parziale del contact center (fonte secondaria) |
-| Pianura | Digital X: customer journey sui canali digitali | Operations X: caring per la fidelizzazione | Crescita dei clienti digitali (dato del 2024, da aggiornare) |
+| Valtellux | Consulting X: analisi e armonizzazione dei processi di customer care | Operations X: gestione dei contatti e dei volumi, anche nei picchi | «acquisizioni» Acquisizione di due operatori locali in Valtellina (2025): processi di contatto da unificare |
+| Brennergy | Digital X: customer journey sui canali digitali | Operations X: gestione dei contatti e dei volumi, anche nei picchi | «app» Lancio dell'app clienti e del canale chat (2025); «crescita dei clienti» Ingresso nel mercato veneto con 60.000 nuovi clienti (2026) |
+| Lagoverde | Consulting X: formazione dei team commerciali, di front-office e dei team leader | Consulting X: standard di servizio e di accoglienza | «formazione» Progetto di formazione per gli operatori di sportello (2025, da confermare) |
+| Orovia | Operations X: gestione dei contatti e dei volumi, anche nei picchi | Consulting X: misurazione dell'esperienza del cliente o del paziente | «esternalizzazione dei contatti» Esternalizzazione parziale del contact center (2025, fonte secondaria) |
+| Pianura | — | — | Nessun aggancio trovato |
 
 **Verifiche consigliate**
 
@@ -844,6 +845,50 @@ function inCatalog(cat, service) {
   const bu = buKey(m[1]), s = norm(m[2]);
   return cat.some(x => x.bu === bu && (x.s === s || x.s.includes(s) || s.includes(x.s)));
 }
+/* ---------- forza dell'aggancio (istruzioni v0.4) ---------- */
+const HOOK_FLAG = /da confermare|da aggiornare|fonte secondaria|da verificare/i;
+const VOCE_RE = /^\s*(?:«|<<|“|")\s*([^»>”"]{2,80}?)\s*(?:»|>>|”|")\s*/;
+const legacyRun = run => { const m = String((run && run.istr) || '').match(/v(\d+(?:\.\d+)?)/); return !!m && +m[1] < 0.4; };
+const voceEq = (a, b) => { const A = norm(a), B = norm(b); return A === B || (B.length >= 4 && A.length >= 4 && (A.includes(B) || B.includes(A))); };
+function trigs() {
+  if (!istr && !istrTried) { istrTried = true; loadIstr().then(() => rerender()).catch(() => {}); }
+  return istr ? parseBlock(istr, /quando proporre/i) : null;
+}
+function factFor(text, facts) {
+  const A = [...new Set(stem5(text).filter(w => !/^\d+$/.test(w)))];
+  if (A.length < 2) return null;
+  let best = null, sc = 0;
+  facts.forEach(f => { const B = stem5(f); const k = A.filter(w => B.includes(w)).length / A.length; if (k > sc) { sc = k; best = f; } });
+  return sc >= 0.5 ? best : null;
+}
+function hookOf(c, trig, run) {
+  const h = plain(c.hook), first = h.split(/;\s*(?=«|<<|“|")/)[0];
+  if (legacyRun(run)) return { lv: 'na', t: 'legacy', why: `Output prodotto con le istruzioni ${run.istr}, che non chiedevano la voce dell'elenco` };
+  if (/nessun aggancio/i.test(h)) return { lv: 'none', t: 'none', why: 'L\'agent non ha trovato un fatto che giustifichi un servizio CXI' };
+  if (!filled(c.hook)) return { lv: 'weak', t: 'missing', why: 'Aggancio al fatto non indicato' };
+  const m = first.match(VOCE_RE), fact = m ? first.slice(m[0].length).trim() : first;
+  if (!m) return { lv: 'weak', t: 'novoce', why: 'Manca la voce dell\'elenco «Quando proporre»', fact };
+  const voce = m[1].trim();
+  const bm = plain(c.main).match(/^([^:]+?):/), bu = bm ? buKey(bm[1]) : '';
+  const tf = factFor(fact, c.facts), flag = (first.match(HOOK_FLAG) || (tf && tf.match(HOOK_FLAG)) || [])[0];
+  const flagWhy = flag ? `; il fatto è segnalato «${flag}»` : '';
+  if (/fuori elenco/i.test(voce)) return { lv: 'weak', t: 'out', out: true, voce, fact, why: `Fatto fuori elenco: nessuna voce di «Quando proporre» lo copre${flagWhy}` };
+  if (!trig) return { lv: 'na', t: 'noistr', voce, fact, why: 'Istruzioni non disponibili: non posso controllare la voce' };
+  const owners = Object.entries(trig).filter(([, v]) => v.replace(/\.\s*$/, '').split(/;\s*/).some(x => voceEq(x, voce))).map(([k]) => k);
+  if (!owners.length) return { lv: 'weak', t: 'notinlist', voce, fact, why: `La voce «${voce}» non è nell'elenco «Quando proporre»${flagWhy}` };
+  if (!bu) return { lv: 'weak', t: 'nobu', voce, fact, why: 'Il servizio principale non indica la business unit' };
+  if (!owners.includes(bu)) return { lv: 'weak', t: 'wrongbu', voce, fact, why: `La voce «${voce}» è di ${owners.map(buLabel).join(' e ')}, ma il servizio principale è di ${buLabel(bu)}${flagWhy}` };
+  if (flag) return { lv: 'weak', t: 'flag', voce, fact, why: `Voce «${voce}» di ${buLabel(bu)}, ma il fatto è segnalato «${flag}»` };
+  return { lv: 'strong', t: 'ok', voce, fact, why: `Voce «${voce}» di ${buLabel(bu)}, fatto senza segnalazioni` };
+}
+function hooks(run) {
+  const d = run.data, trig = trigs(), ic3 = d.criteria.findIndex(k => /cambiament/.test(norm(k.name)));
+  return d.companies.map(c => { const h = hookOf(c, trig, run); h.incoh = h.lv === 'none' && ic3 >= 0 && c.scores[ic3] === 3; return h; });
+}
+const HOOKLV = { strong: ['ok', 'checkc', 'Aggancio forte'], weak: ['todo', 'alert', 'Aggancio debole'], none: ['neutral', 'x', 'Nessun aggancio'], na: ['neutral', 'info', 'Non valutabile'] };
+const HOOKSHORT = { strong: 'Forte', weak: 'Debole', none: 'Nessuno', na: 'n.v.' };
+const hpill = (h, short) => { const [cls, icn, txt] = HOOKLV[h.lv]; return `<span class="pill ${cls}" title="${esc(txt + ': ' + h.why)}">${ic(icn)}${short ? HOOKSHORT[h.lv] : txt}</span>`; };
+const HOOK_T = { novoce: 'voce mancante', missing: 'aggancio mancante', notinlist: 'voce non in elenco', wrongbu: 'voce di un\'altra business unit', nobu: 'servizio senza business unit', flag: 'fatto incerto', out: 'fuori elenco' };
 const verOf = (run, name) => (run.ver && run.ver[name]) || {};
 function vstate(v) { if (v.vincoli === 'no' || (+v.falsi || 0) > 0) return 'ko'; if (v.vincoli === 'si') return 'ok'; return 'todo'; }
 const VSTATE = { todo: ['todo', 'clock', 'Da verificare'], ok: ['ok', 'checkc', 'Conforme'], ko: ['ko', 'alert', 'Con errori'] };
@@ -881,6 +926,7 @@ function measures(run) {
   const asked = run.request && run.request.mode !== 'libera' && +run.request.nomi ? +run.request.nomi : num((d.params.find(([k]) => /numero/.test(norm(k))) || [])[1]);
   const add = m => out.push({ g: 'ec', sub: '', ...m });
   const vs = cs.map(c => verOf(run, c.name));
+  const HK = hooks(run);
 
   const ans = vs.filter(v => v.vincoli === 'si' || v.vincoli === 'no'), si = ans.filter(v => v.vincoli === 'si').length, left = n - ans.length;
   const U01 = '% parametri della richiesta rispettati, vincoli e criteri';
@@ -893,8 +939,8 @@ function measures(run) {
   add({ code: 'EC02', name: 'Dimensione set risultati', unit: 'sì/no: almeno i nomi richiesti', value: asked ? `${n >= asked ? 'Sì' : 'No'}: ${n} nomi su ${asked} richiesti` : `${n} nomi; il numero richiesto non è indicato`, ok: asked ? n >= asked : null, target: 'sì', how: 'auto', val: asked ? (n >= asked ? 1 : 0) : null });
 
   let tot = 0, ok = 0; const cell = v => { tot++; if (filled(v)) ok++; };
-  cs.forEach(c => {
-    [c.sede, c.metric, c.fonte, c.cluster, c.main, c.second, c.hook].forEach(cell);
+  cs.forEach((c, i) => {
+    [c.sede, c.metric, c.fonte, c.cluster, ...(HK[i].lv === 'none' ? ['ok', 'ok', 'ok'] : [c.main, c.second, c.hook])].forEach(cell);
     if (d.criteria.length) c.scores.forEach(v => cell(v == null ? '' : String(v))); else cell('');
     cell(c.tot == null ? '' : String(c.tot));
     cell(c.facts.filter(factOk).join(' '));
@@ -924,12 +970,12 @@ function measures(run) {
 
   const svc = cs.flatMap(c => [c.main, c.second].filter(filled).map(s => ({ c: c.name, s })));
   const bad = cat ? svc.filter(x => !inCatalog(cat, x.s)) : [];
-  add({ code: 'EC08', name: 'Conoscenza catalogo CXI', unit: '% servizi proposti presenti nel catalogo CXI', value: cat ? `${pct(svc.length - bad.length, svc.length) ?? 0}% (${svc.length - bad.length} su ${svc.length} servizi nel catalogo)${bad.length ? '. Fuori catalogo: ' + bad.map(x => `${x.c}, «${plain(x.s)}»`).join('; ') : ''}` : 'Catalogo non disponibile: il sito non riesce a leggere istruzioni.txt', ok: cat && svc.length ? !bad.length : null, target: '100%', how: 'auto', val: cat ? pct(svc.length - bad.length, svc.length) : null });
+  add({ code: 'EC08', name: 'Conoscenza catalogo CXI', unit: '% servizi proposti presenti nel catalogo CXI', value: cat && !svc.length ? 'Nessun servizio proposto' : cat ? `${pct(svc.length - bad.length, svc.length) ?? 0}% (${svc.length - bad.length} su ${svc.length} servizi nel catalogo)${bad.length ? '. Fuori catalogo: ' + bad.map(x => `${x.c}, «${plain(x.s)}»`).join('; ') : ''}` : 'Catalogo non disponibile: il sito non riesce a leggere istruzioni.txt', ok: cat && svc.length ? !bad.length : null, target: '100%', how: 'auto', val: cat ? pct(svc.length - bad.length, svc.length) : null });
 
   const trig = parseBlock(istr, /quando proporre/i);
   const per = trig ? Object.entries(trig).map(([k, v]) => [buLabel(k), v.replace(/\.\s*$/, '').split(/;\s*/).filter(x => x.trim()).length]) : [];
   const nt = per.reduce((s, [, x]) => s + x, 0), iv = istrVersion(istr);
-  add({ code: 'EC09', name: 'Regole di abbinamento fatto → business unit', unit: 'n. tipi di fatto collegati a una business unit', value: trig ? `${nt} nelle istruzioni ${iv} (${per.map(([k, x]) => `${k} ${x}`).join(', ')})${run.istr && run.istr !== iv ? `; questa ricerca ha usato le istruzioni ${run.istr}` : ''}` : 'Istruzioni non disponibili: il sito non riesce a leggere istruzioni.txt', ok: null, target: 'da fissare', how: 'istr', val: trig ? nt : null });
+  add({ code: 'EC09', name: 'Regole di abbinamento fatto → business unit', unit: 'n. tipi di fatto collegati a una business unit', value: trig ? `${nt} nelle istruzioni ${iv} (${per.map(([k, x]) => `${k} ${x}`).join(', ')})${run.istr && run.istr !== iv ? `; questa ricerca ha usato le istruzioni ${run.istr}` : ''}${HK.some(h => h.out) ? `; fatti fuori elenco in questa ricerca: ${HK.filter(h => h.out).length} (candidati a nuove voci, vedi Agganci tracciabili)` : ''}` : 'Istruzioni non disponibili: il sito non riesce a leggere istruzioni.txt', ok: null, target: 'da fissare', how: 'istr', val: trig ? nt : null });
 
   const fullRoles = d.roles.filter(r => [r.ruolo, r.peso, r.interessa, r.messaggio].every(filled)).length;
   add({ code: 'EC10', name: 'Copertura ruoli con attributi decisionali', unit: 'n. ruoli con peso, interessi e primo messaggio', value: `${fullRoles} ruoli completi di peso, interessi e primo messaggio`, ok: fullRoles >= 3, target: 'almeno 3', how: 'auto', val: fullRoles });
@@ -945,8 +991,14 @@ function measures(run) {
 
   const dati = vs.reduce((s, v) => s + (+v.dati || 0), 0), falsi = vs.reduce((s, v) => s + Math.min(+v.falsi || 0, +v.dati || 0), 0);
   add({ g: 'val', code: '', name: 'Dati veritieri', unit: '% dati controllati risultati veritieri', value: dati ? `${dati - falsi} su ${dati} dati controllati (${pct(dati - falsi, dati)}%); falsi o inesistenti: ${falsi}` : 'Nessun dato ancora controllato', ok: dati ? falsi === 0 : null, target: '100%', how: 'verifica', val: dati ? pct(dati - falsi, dati) : null });
-  const hk = cs.filter(c => filled(c.hook)).length;
-  add({ g: 'val', code: '', name: 'Aggancio al fatto', unit: '% aziende con un fatto concreto a sostegno della proposta', value: `${hk} su ${n} aziende con l'aggancio al fatto (${pct(hk, n) ?? 0}%)`, ok: n ? hk === n : null, target: '100%', how: 'auto', val: pct(hk, n) });
+  const prop = HK.filter(h => h.lv === 'strong' || h.lv === 'weak'), strong = prop.filter(h => h.lv === 'strong').length, none = HK.filter(h => h.lv === 'none').length;
+  const weakBy = Object.entries(prop.filter(h => h.lv === 'weak').reduce((o, h) => (o[h.t] = (o[h.t] || 0) + 1, o), {})).map(([k, x]) => `${HOOK_T[k] || k} ${x}`);
+  const outs = cs.filter((c, i) => HK[i].out).map((c, i) => c.name), incoh = cs.filter((c, i) => HK[i].incoh).map(c => c.name);
+  const hkNA = HK.length && HK.every(h => h.lv === 'na');
+  const hkVal = hkNA ? (HK[0].t === 'legacy' ? `Non applicabile: ${HK[0].why.charAt(0).toLowerCase() + HK[0].why.slice(1)}` : 'Istruzioni non disponibili: il sito non riesce a leggere istruzioni.txt')
+    : prop.length ? `${strong} su ${prop.length} aziende con un servizio proposto (${pct(strong, prop.length)}%)${weakBy.length ? `; deboli per ${weakBy.join(', ')}` : ''}. Nessun aggancio: ${none} su ${n}${outs.length ? `; fuori elenco: ${outs.join(', ')}` : ''}${incoh.length ? `; incoerenti (nessun aggancio ma Cambiamento 3): ${incoh.join(', ')}` : ''}`
+    : n ? `Nessun servizio proposto: ${none} su ${n} aziende senza aggancio${incoh.length ? `; incoerenti (nessun aggancio ma Cambiamento 3): ${incoh.join(', ')}` : ''}` : 'Nessuna azienda';
+  add({ g: 'val', code: '', name: 'Agganci tracciabili', unit: '% proposte di servizio con aggancio forte', value: hkVal, ok: hkNA || !prop.length ? null : strong === prop.length && !incoh.length, target: '100% delle proposte', how: 'auto', val: hkNA || !prop.length ? null : pct(strong, prop.length) });
   const t = run.t || {}, m1 = mins(t.start, t.output), m2 = mins(t.start, t.verified);
   add({ g: 'val', code: '', name: 'Tempo per query', unit: 'minuti dalla richiesta all\'output verificato', value: ex ? 'Non misurato: è l\'esempio' : !t.start ? 'Non misurato: la richiesta non è partita da questo sito' : `${fmtMin(m1)} dalla richiesta all'output; ${t.verified ? `${fmtMin(m2)} fino all'ultima verifica` : 'verifica in corso'}`, ok: null, target: 'da fissare', how: 'auto', val: m2 });
   return out;
@@ -965,7 +1017,7 @@ function measuresHTML(run) {
     ${ms.filter(m => m.g === 'ec').map(row).join('')}
     </tbody></table></div>
     <h3 style="margin:22px 0 4px">Indicatori di validazione</h3>
-    <p class="muted small" style="margin:0 0 12px">Misure di prestazione dell'agent, fuori dalla casa: servono per i test e per il confronto con il processo attuale.</p>
+    <p class="muted small" style="margin:0 0 12px">Misure di prestazione dell'agent, fuori dalla casa: servono per i test e per il confronto con il processo attuale. Agganci tracciabili: un aggancio è forte se la voce dell'elenco «Quando proporre» è della business unit del servizio principale e il fatto non è segnalato come incerto. Controlla la coerenza, non che la proposta sia convincente: quello resta alla tua verifica. Le aziende senza aggancio non abbassano la percentuale: dichiararlo è la risposta corretta.</p>
     <div class="table-wrap"><table class="mini ec"><thead><tr><th>Indicatore</th><th>Valore</th><th>Obiettivo</th><th>Dato</th><th>Stato</th></tr></thead><tbody>
     ${ms.filter(m => m.g === 'val').map(row).join('')}
     </tbody></table></div></section>`;
@@ -1192,6 +1244,7 @@ function viewRisultati() {
     return `<th aria-sort="${on ? (k === 'prio' || sortBy.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="sort${on ? ' on' : ''}" data-act="sort" data-k="${k}" title="${esc(tip)}">${label}${ic(on && k !== 'prio' ? (sortBy.dir < 0 ? 'down' : 'up') : on ? 'up' : 'updown')}</button></th>`;
   };
   const sortNote = sortBy.k === 'prio' ? 'Seleziona fino a 3 aziende per confrontarle. Clicca sulle frecce per ordinare la tabella.' : `<span class="sortnote">Ordinate per ${esc(SORT[sortBy.k][0])}, ${sortBy.dir < 0 ? 'dal più alto' : 'dal più basso'}; la colonna # resta la priorità dell'agent. <button class="btn ghost sm" data-act="sort" data-k="prio">Torna all'ordine di priorità</button></span>`;
+  const H = hooks(run);
   const rows = order.map(i => {
     const c = d.companies[i];
     return `<tr>
@@ -1202,8 +1255,9 @@ function viewRisultati() {
       <td>${inline(c.metric) || '—'}</td>
       ${d.showFat ? `<td>${inline(c.fat) || '—'}</td>` : ''}
       <td>${c.tot != null ? `<div class="score"><b>${c.tot}<small>/${max}</small></b>${bar(c.tot, max)}</div>` : '—'}</td>
+      <td>${hpill(H[i], 1)}</td>
       <td><a class="nolink" href="#/azienda/${i}/verifica" title="Apri la verifica di questa azienda">${vpill(verOf(run, c.name))}</a></td>
-      <td><a class="btn sm" href="#/azienda/${i}">Vedi dettagli</a></td></tr>`;
+      <td><a class="btn sm" href="#/azienda/${i}">Dettagli</a></td></tr>`;
   }).join('');
   const vdone = run.checks || {};
   return `<div class="page-head">
@@ -1215,7 +1269,7 @@ function viewRisultati() {
   ${d.logic ? `<p class="logic">${ic('info')}<span>${inline(d.logic)}</span></p>` : ''}
   ${d.companies.length ? `<section class="panel" style="padding:0">
     <div class="tablebar"><span class="grow muted small">${sortNote}</span><button class="btn sm blue" data-act="goCompare" ${sel.length < 2 ? 'disabled' : ''}>${ic('compare')}Confronta (${sel.length})</button></div>
-    <div class="table-wrap"><table class="res"><thead><tr><th><span class="sr">Seleziona</span></th>${sth('prio', '#')}<th>Azienda</th><th>Cluster</th>${metricNum ? sth('metric', esc(d.metricLabel || 'Dimensione')) : `<th>${esc(d.metricLabel || 'Dimensione')}</th>`}${d.showFat ? sth('fat', esc(d.fatLabel)) : ''}${sth('tot', 'Punteggio')}<th>Stato verifica</th><th><span class="sr">Azioni</span></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="table-wrap"><table class="res"><thead><tr><th><span class="sr">Seleziona</span></th>${sth('prio', '#')}<th>Azienda</th><th>Cluster</th>${metricNum ? sth('metric', esc(d.metricLabel || 'Dimensione')) : `<th>${esc(d.metricLabel || 'Dimensione')}</th>`}${d.showFat ? sth('fat', esc(d.fatLabel)) : ''}${sth('tot', 'Punteggio')}<th>Aggancio</th><th>Stato verifica</th><th><span class="sr">Azioni</span></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>` : `<div class="strip red">${ic('alert')}<span>Nell'output non ho trovato l'elenco delle aziende.</span></div>`}
   <div class="res-grid">
     <section class="panel"><h2>${ic('checkc')}Verifiche consigliate</h2>
@@ -1239,6 +1293,7 @@ function viewAzienda(arg) {
   const color = { g: 'var(--green)', a: 'var(--amber)', r: 'var(--red)' }[tone(c.tot, max)];
   const crit = d.criteria.map((k, idx) => [k.name, c.scores[idx], k.max]);
   const roles = rolesFor(d, c);
+  const hk = hooks(run)[i];
   return `<div class="page-head" style="margin-bottom:12px"><a class="back" href="#/risultati" style="margin:0">${ic('back')}Torna ai risultati</a>
     <div class="row no-print"><a class="nolink" id="verPill" href="#/azienda/${i}/verifica" title="Vai alla verifica">${vpill(verOf(run, c.name))}</a><button class="btn" data-act="dlScheda" data-i="${i}">${ic('download')}Esporta scheda</button></div></div>
   ${run.source === 'esempio' ? `<div class="strip amber">${ic('info')}<span>Azienda e dati inventati, per l'esempio.</span></div>` : ''}
@@ -1264,10 +1319,12 @@ function viewAzienda(arg) {
     <section class="panel"><h2>${ic('bulb')}Fatti recenti</h2>
       ${c.facts.length ? `<ul class="facts">${c.facts.map(f => `<li>${lvlBadge(f)}${inline(f)}</li>`).join('')}</ul>` : '<p class="muted">Nessun fatto riportato per questa azienda.</p>'}</section>
     <section class="panel"><h2>${ic('star')}Servizi CXI suggeriti</h2>
-      ${c.main ? `<div class="svc main"><small>Servizio principale</small><b>${inline(c.main)}</b></div>` : ''}
-      ${c.second ? `<div class="svc sec"><small>Servizio secondario</small><b>${inline(c.second)}</b></div>` : ''}
-      ${c.hook ? `<div class="hook"><b>Perché è interessante per CXI</b>${inline(c.hook)}</div>` : ''}
-      ${!c.main && !c.second ? '<p class="muted">Nessun servizio indicato.</p>' : ''}</section>
+      <div class="hookline">${hpill(hk)}${hk.lv !== 'none' ? `<span class="muted small">${esc(hk.why)}</span>` : ''}</div>
+      ${filled(c.main) ? `<div class="svc main"><small>Servizio principale</small><b>${inline(c.main)}</b></div>` : ''}
+      ${filled(c.second) ? `<div class="svc sec"><small>Servizio secondario</small><b>${inline(c.second)}</b></div>` : ''}
+      ${hk.lv === 'none' ? '<p class="muted">Nessun servizio proposto: per questa azienda l\'agent non ha trovato un fatto che giustifichi un servizio CXI. Resta nella lista come prospect, da approfondire prima del contatto.</p>' : c.hook ? `<div class="hook"><b>Perché è interessante per CXI</b>${inline(c.hook)}</div>` : ''}
+      ${!filled(c.main) && !filled(c.second) && hk.lv !== 'none' ? '<p class="muted">Nessun servizio indicato.</p>' : ''}
+      ${hk.incoh ? `<div class="strip amber" style="margin:12px 0 0">${ic('alert')}<span>Nessun aggancio, ma Cambiamento 3: il punteggio di Cambiamento non ha fatti a sostegno. Controlla la Tabella 3.</span></div>` : ''}</section>
   </div>
   ${verHTML(run, i, c)}
   <section class="panel" style="margin-top:20px"><h2>${ic('people')}Interlocutori e buyer persona</h2>
@@ -1304,6 +1361,7 @@ function viewConfronto() {
     [esc(d.metricLabel || 'Dimensione'), c => inline(c.metric) || '—'],
     ...d.criteria.map((k, idx) => [esc(k.name), c => `<div class="cmp-cell"><b>${c.scores[idx] ?? '—'}/${k.max}</b>${bar(c.scores[idx], k.max)}</div>`]),
     ['Servizio principale', c => inline(c.main) || '—'],
+    ['Aggancio', c => hpill(hookOf(c, trigs(), run))],
     ['Stato verifica', c => vpill(verOf(run, c.name))]
   ];
   return `<div class="page-head"><div><h1>Confronto aziende</h1><p class="lead">${esc(runTitle(run))}</p></div><a class="back" href="#/risultati" style="margin:0">${ic('back')}Torna ai risultati</a></div>
@@ -1373,6 +1431,7 @@ function viewGuida() {
     <tr><td>Indicatori della casa della qualità calcolati sull'output, con cronometro</td><td>Sì, tranne EC11 (token al secondo) ed EC13 (dati riservati)</td></tr>
     <tr><td>Criteri di priorità diversi da quelli di default</td><td>Sì: se li indichi, nel modulo o a parole, l'agent usa solo quelli, da 1 a 3 ciascuno; se non indichi niente usa il modello di default. Il sito legge i criteri dalla classifica dell'output</td></tr>
     <tr><td>Tabella dei risultati ordinabile per fatturato, dimensione o punteggio</td><td>Sì: con le frecce nelle intestazioni</td></tr>
+    <tr><td>Forza dell'aggancio fra fatto e servizio proposto (forte, debole, nessun aggancio)</td><td>Sì, con le istruzioni v0.4: l'agent scrive la voce dell'elenco «Quando proporre» che ha usato, e il sito controlla con regole fisse che sia della business unit del servizio e che il fatto non sia segnalato come incerto. Se non trova un aggancio, l'agent lo dichiara invece di forzarlo</td></tr>
     <tr><td>Feedback sui tre criteri CXI, esportazione in Excel e registro .json con testo inviato, tempi e indicatori</td><td>Sì</td></tr>
     <tr><td>Ricerca automatica senza chat (API del modello)</td><td>No: serve una chiave a pagamento</td></tr>
     <tr><td>Aziende, Opportunità, Report, Impostazioni</td><td>No: collegamento al CRM, fuori dal perimetro</td></tr>
@@ -1461,9 +1520,10 @@ const ACT = {
   chk(el) { const run = currentRun(); run.checks = run.checks || {}; run.checks[el.dataset.i] = el.checked; saveRuns(); el.closest('li').classList.toggle('done', el.checked); },
   csv() {
     const run = currentRun(), d = run.data;
-    const head = ['Priorità', 'Azienda', 'Sede', d.metricLabel || 'Dimensione', ...(d.showFat ? [d.fatLabel] : []), 'Cluster', ...d.criteria.map(k => `${k.name} (su ${k.max})`), 'Totale', 'Servizio principale', 'Servizio secondario', 'Aggancio al fatto', 'Fonte', 'Stato verifica', 'Vincoli rispettati', 'Dati controllati', 'Dati falsi', 'Fonti aperte', 'Fonti valide', 'Note di verifica'];
+    const head = ['Priorità', 'Azienda', 'Sede', d.metricLabel || 'Dimensione', ...(d.showFat ? [d.fatLabel] : []), 'Cluster', ...d.criteria.map(k => `${k.name} (su ${k.max})`), 'Totale', 'Servizio principale', 'Servizio secondario', 'Aggancio al fatto', 'Forza aggancio', 'Motivo forza aggancio', 'Fonte', 'Stato verifica', 'Vincoli rispettati', 'Dati controllati', 'Dati falsi', 'Fonti aperte', 'Fonti valide', 'Note di verifica'];
     const q = v => '"' + plain(v ?? '').replace(/"/g, '""') + '"';
-    const lines = [head.map(q).join(';')].concat(d.companies.map((c, i) => { const v = verOf(run, c.name); return [c.prio ?? i + 1, c.name, c.sede, c.metric, ...(d.showFat ? [c.fat] : []), c.cluster, ...c.scores, c.tot, c.main, c.second, c.hook, c.fonte, VSTATE[vstate(v)][2], v.vincoli === 'si' ? 'Sì' : v.vincoli === 'no' ? 'No' : '', v.dati, v.falsi, v.fonti, v.valide, v.note].map(q).join(';'); }));
+    const H = hooks(run);
+    const lines = [head.map(q).join(';')].concat(d.companies.map((c, i) => { const v = verOf(run, c.name); return [c.prio ?? i + 1, c.name, c.sede, c.metric, ...(d.showFat ? [c.fat] : []), c.cluster, ...c.scores, c.tot, c.main, c.second, c.hook, HOOKLV[H[i].lv][2], H[i].why, c.fonte, VSTATE[vstate(v)][2], v.vincoli === 'si' ? 'Sì' : v.vincoli === 'no' ? 'No' : '', v.dati, v.falsi, v.fonti, v.valide, v.note].map(q).join(';'); }));
     download(`prospect_${stamp()}.csv`, '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
   },
   dlMd() { const run = currentRun(); download(`output_${stamp()}.md`, run.raw, 'text/markdown;charset=utf-8'); },
@@ -1480,7 +1540,7 @@ const ACT = {
         testo_inviato: run.prompt || null,
         tempi: { inizio: iso(t.start), testo_copiato: iso(t.copy), output: iso(t.output), ultima_verifica: iso(t.verified), minuti_fino_output: mins(t.start, t.output), minuti_fino_verifica: mins(t.start, t.verified) },
         criteri: d.criteria,
-        aziende: d.companies.map(c => ({ nome: c.name, priorita: c.prio, fatturato: plain(c.fat) || null, punteggi: c.scores, totale: c.tot, stato: VSTATE[vstate(verOf(run, c.name))][2], verifica: verOf(run, c.name) })),
+        aziende: d.companies.map((c, i) => ({ nome: c.name, priorita: c.prio, fatturato: plain(c.fat) || null, punteggi: c.scores, totale: c.tot, aggancio: (h => ({ forza: HOOKLV[h.lv][2], voce: h.voce || null, motivo: h.why }))(hooks(run)[i]), stato: VSTATE[vstate(verOf(run, c.name))][2], verifica: verOf(run, c.name) })),
         esclusi: d.excluded.map(x => ({ nome: x.name, motivo: plain(x.why) })),
         verifiche_consigliate_fatte: Object.keys(run.checks || {}).filter(k => run.checks[k]).map(Number),
         misure: measures(run).map(m => ({ gruppo: m.g === 'ec' ? 'casa della qualità' : 'validazione', ec: m.code || null, indicatore: m.name + (m.sub ? ` (${m.sub})` : ''), unita: m.unit, valore: m.val, descrizione: m.value, obiettivo: m.target, in_obiettivo: m.ok, origine: { auto: 'automatico', verifica: 'verifica dell\'account', istr: 'istruzioni', multi: 'più esecuzioni', no: 'non misurato' }[m.how] })),
@@ -1491,7 +1551,7 @@ const ACT = {
   },
   dlScheda(el) {
     const run = currentRun(), d = run.data, c = d.companies[+el.dataset.i], max = maxScore(d);
-    const md = [`# ${c.name}`, '', `- Cluster: ${plain(c.cluster)}`, `- Sede: ${plain(c.sede)}`, `- ${d.metricLabel}: ${plain(c.metric)}`, ...(d.showFat ? [`- ${d.fatLabel}: ${plain(c.fat)}`] : []), `- Altri dati: ${plain(c.altri)}`, `- Fonte: ${plain(c.fonte)}`, '', `## Punteggio: ${c.tot}/${max}`, ...d.criteria.map((k, idx) => `- ${k.name}: ${c.scores[idx] ?? '—'}/${k.max}`), '', '## Fatti recenti', ...c.facts.map(f => '- ' + plain(f)), '', '## Servizi CXI', `- Principale: ${plain(c.main)}`, `- Secondario: ${plain(c.second)}`, `- Aggancio al fatto: ${plain(c.hook)}`, '', '## Interlocutori', ...rolesFor(d, c).map(r => `- ${r.ruolo} (${r.peso}): ${plain(r.interessa)}`), '', '## Verifica dell\'account', `- Stato: ${VSTATE[vstate(verOf(run, c.name))][2]}`, `- Vincoli rispettati: ${{ si: 'sì', no: 'no' }[verOf(run, c.name).vincoli] || 'non ancora verificato'}`, `- Dati controllati: ${verOf(run, c.name).dati ?? '—'}, di cui falsi: ${verOf(run, c.name).falsi ?? '—'}`, `- Fonti aperte: ${verOf(run, c.name).fonti ?? '—'}, valide: ${verOf(run, c.name).valide ?? '—'}`, '', run.source === 'esempio' ? '_Dati di esempio, inventati._' : `_Output da ${run.platform}, ${fmtDate(run.created)}: da verificare prima dell'uso._`].join('\n');
+    const md = [`# ${c.name}`, '', `- Cluster: ${plain(c.cluster)}`, `- Sede: ${plain(c.sede)}`, `- ${d.metricLabel}: ${plain(c.metric)}`, ...(d.showFat ? [`- ${d.fatLabel}: ${plain(c.fat)}`] : []), `- Altri dati: ${plain(c.altri)}`, `- Fonte: ${plain(c.fonte)}`, '', `## Punteggio: ${c.tot}/${max}`, ...d.criteria.map((k, idx) => `- ${k.name}: ${c.scores[idx] ?? '—'}/${k.max}`), '', '## Fatti recenti', ...c.facts.map(f => '- ' + plain(f)), '', '## Servizi CXI', `- Principale: ${plain(c.main)}`, `- Secondario: ${plain(c.second)}`, `- Aggancio al fatto: ${plain(c.hook)}`, `- Forza dell'aggancio: ${(h => `${HOOKLV[h.lv][2]} (${h.why})`)(hooks(run)[+el.dataset.i])}`, '', '## Interlocutori', ...rolesFor(d, c).map(r => `- ${r.ruolo} (${r.peso}): ${plain(r.interessa)}`), '', '## Verifica dell\'account', `- Stato: ${VSTATE[vstate(verOf(run, c.name))][2]}`, `- Vincoli rispettati: ${{ si: 'sì', no: 'no' }[verOf(run, c.name).vincoli] || 'non ancora verificato'}`, `- Dati controllati: ${verOf(run, c.name).dati ?? '—'}, di cui falsi: ${verOf(run, c.name).falsi ?? '—'}`, `- Fonti aperte: ${verOf(run, c.name).fonti ?? '—'}, valide: ${verOf(run, c.name).valide ?? '—'}`, '', run.source === 'esempio' ? '_Dati di esempio, inventati._' : `_Output da ${run.platform}, ${fmtDate(run.created)}: da verificare prima dell'uso._`].join('\n');
     download(`scheda_${norm(c.name).replace(/ /g, '-')}.md`, md, 'text/markdown;charset=utf-8');
   },
   star(el) { fbDraft[el.dataset.k] = +el.dataset.n; $$(`[data-act="star"][data-k="${el.dataset.k}"]`).forEach(b => { b.classList.toggle('on', +b.dataset.n <= fbDraft[el.dataset.k]); b.setAttribute('aria-pressed', +b.dataset.n === fbDraft[el.dataset.k]); }); },

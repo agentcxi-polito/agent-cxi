@@ -12,7 +12,7 @@ st.set_page_config(page_title="Agent CXI – Prevendita B2B", page_icon="🔎", 
 
 BASE = Path(__file__).parent
 ISTRUZIONI = (BASE / "istruzioni.txt").read_text(encoding="utf-8")
-VERSIONE = "v0"
+VERSIONE = "v0.4"
 HAS_SECRETS = st.secrets.load_if_toml_exists()
 API_KEY = (st.secrets.get("GEMINI_API_KEY") if HAS_SECRETS else None) or os.environ.get("GEMINI_API_KEY")
 MODELLO = (st.secrets.get("GEMINI_MODEL") if HAS_SECRETS else None) or os.environ.get("GEMINI_MODEL") or "gemini-flash-latest"
