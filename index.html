@@ -241,6 +241,7 @@ table.mini tr:last-child td{border-bottom:0}
 details.more{margin-top:20px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg)}
 details.more summary{cursor:pointer;padding:14px 20px;font-weight:600}
 details.more > div{padding:0 20px 18px}
+details.more.params-first{margin:0 0 16px}
 .raw{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:#F7F9FC;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:420px;overflow:auto}
 mark.flag{background:var(--amber-soft);color:var(--amber-ink);border-radius:4px;padding:0 4px;font-weight:600}
 .lvl{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:6px;font-size:12px;font-weight:700;margin-right:6px;vertical-align:1px}
@@ -1265,6 +1266,7 @@ function viewRisultati() {
   </div>
   ${sourceLine(run)}
   ${/senza ricerca web/i.test(run.raw) ? `<div class="strip red">${ic('alert')}<span>La chat ha lavorato senza ricerca web: i dati vengono dalla memoria del modello e vanno verificati tutti. Meglio rifare la ricerca con la ricerca web attiva.</span></div>` : ''}
+  <details class="more params-first"><summary>Parametri usati dall'agent</summary><div>${d.params.length ? `<table class="mini"><tbody>${d.params.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${inline(v)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">L\'output non contiene il riepilogo dei parametri.</p>'}</div></details>
   ${d.logic ? `<p class="logic">${ic('info')}<span>${inline(d.logic)}</span></p>` : ''}
   ${d.companies.length ? `<section class="panel" style="padding:0">
     <div class="tablebar"><span class="grow muted small">${sortNote}</span><button class="btn sm blue" data-act="goCompare" ${sel.length < 2 ? 'disabled' : ''}>${ic('compare')}Confronta (${sel.length})</button></div>
@@ -1279,7 +1281,6 @@ function viewRisultati() {
     </section>
   </div>
   ${measuresHTML(run)}
-  <details class="more"><summary>Parametri usati dall'agent</summary><div>${d.params.length ? `<table class="mini"><tbody>${d.params.map(([k, v]) => `<tr><td class="muted">${esc(k)}</td><td>${inline(v)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">L\'output non contiene il riepilogo dei parametri.</p>'}</div></details>
   <details class="more"><summary>Testo originale dell'output</summary><div><pre class="raw">${esc(run.raw)}</pre><div class="row" style="margin-top:10px"><button class="btn sm" data-act="dlMd">${ic('download')}Scarica l'output (.md)</button></div></div></details>`;
 }
 
